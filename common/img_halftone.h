@@ -1,4 +1,5 @@
-
+#include <math.h>
+#include <vector>
 
 namespace ImageHalftoning
 {
@@ -156,6 +157,143 @@ namespace ImageHalftoning
 				iEDA( x+1, y+1, e * 1 / 8 );
 
 				iEDA( x+0, y+2, e * 1 / 8 );
+			}
+		}
+	}
+
+
+	void    ErrDiff_LinearFloydSteinberg( unsigned char * image, int stride, int width, int height )
+	{
+		int					shift	= 20;
+		int					gamma[256];
+		std::vector<int>	data(width*height);
+
+		for( int i = 0; i < 256; i++ )
+		{
+			gamma[i]	= (int)(pow( i / 255.0, 2.2 ) *((1 << shift) - 1));
+		}
+		
+		for( int y = 0; y < height; y++ )
+		{
+			unsigned char*	src_line	= image + stride * y;
+			int *			dst_line	= &data.data()[ width * y ];
+			int				x			= 0;
+
+			for( ; (x+4) <= width; x += 4 )
+			{
+				dst_line[x+0]	= gamma[ src_line[x+0] ];
+				dst_line[x+1]	= gamma[ src_line[x+1] ];
+				dst_line[x+2]	= gamma[ src_line[x+2] ];
+				dst_line[x+3]	= gamma[ src_line[x+3] ];
+			}
+
+			for( ; x < width; x++ )
+			{
+				dst_line[x+0]	= gamma[ src_line[x+0] ];
+			}
+		}
+
+
+		for( int y = 0; y < height; y++ )
+		{
+			int*			line		= &data.data()[ width * y ];
+			unsigned char*	dst_line	= image + stride * y;
+
+			for( int x = 0; x < width; x++ )
+			{
+				int		c	= line[x];
+				int		e	= (1 << (shift-1)) <= c ? c - ((1 << shift) - 1) :  c;
+				
+				dst_line[x]	= (1 << (shift-1)) <= c ? 255 : 0;
+
+				//	-		*		7/16
+				//	3/16	5/16	1/16
+				if( (x+1) < width )	line[x+1]	+= e * 7 / 16;
+
+				if( (y+1) < height )
+				{
+					int*	lineN	= line + width;
+
+					if( 0 <= (x-1) )	lineN[x-1]	+= e * 3 / 16;
+										lineN[x  ]	+= e * 5 / 16;
+					if( (x+2) < width ) lineN[x+1]	+= e * 1 / 16;
+				}
+			}
+		}
+	}
+
+
+	void    ErrDiff_LinearStucki( unsigned char * image, int stride, int width, int height )
+	{
+		int					shift	= 20;
+		int					gamma[256];
+		std::vector<int>	data(width*height);
+
+		for( int i = 0; i < 256; i++ )
+		{
+			gamma[i]	= (int)(pow( i / 255.0, 2.2 ) *((1 << shift) - 1));
+		}
+		
+		for( int y = 0; y < height; y++ )
+		{
+			unsigned char*	src_line	= image + stride * y;
+			int *			dst_line	= &data.data()[ width * y ];
+			int				x			= 0;
+
+			for( ; (x+4) <= width; x += 4 )
+			{
+				dst_line[x+0]	= gamma[ src_line[x+0] ];
+				dst_line[x+1]	= gamma[ src_line[x+1] ];
+				dst_line[x+2]	= gamma[ src_line[x+2] ];
+				dst_line[x+3]	= gamma[ src_line[x+3] ];
+			}
+
+			for( ; x < width; x++ )
+			{
+				dst_line[x+0]	= gamma[ src_line[x+0] ];
+			}
+		}
+
+
+		for( int y = 0; y < height; y++ )
+		{
+			int*			line		= &data.data()[ width * y ];
+			unsigned char*	dst_line	= image + stride * y;
+
+			for( int x = 0; x < width; x++ )
+			{
+				int		c	= line[x];
+				int		e	= (1 << (shift-1)) <= c ? c - ((1 << shift) - 1) :  c;
+				
+				dst_line[x]	= (1 << (shift-1)) <= c ? 255 : 0;
+
+				//	-		-		*		8/42	4/42
+				//	2/42	4/42	8/42	4/42	2/42
+				//	1/42	2/42	4/42	2/42	1/42
+				if( (x+1) < width )	line[x+1]	+= e * 8 / 42;
+				if( (x+2) < width ) line[x+2]	+= e * 4 / 42;
+
+				if( (y+1) < height )
+				{
+					int*	lineN	= line + width;
+
+					if( 0 <= (x-2) )	lineN[x-2]	+= e * 2 / 42;
+					if( 0 <= (x-1) )	lineN[x-1]	+= e * 4 / 42;
+										lineN[x  ]	+= e * 8 / 42;
+					if( (x+2) < width ) lineN[x+1]	+= e * 4 / 42;
+					if( (x+2) < width ) lineN[x+2]	+= e * 2 / 42;
+				}
+
+				if( (y+2) < height )
+				{
+					int*	lineN	= line + width * 2;
+
+					if( 0 <= (x-2) )	lineN[x-2]	+= e * 1 / 42;
+					if( 0 <= (x-1) )	lineN[x-1]	+= e * 2 / 42;
+										lineN[x  ]	+= e * 4 / 42;
+					if( (x+2) < width ) lineN[x+1]	+= e * 2 / 42;
+					if( (x+2) < width ) lineN[x+2]	+= e * 1 / 42;
+				}
 			}
 		}
 	}

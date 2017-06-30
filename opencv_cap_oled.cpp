@@ -36,9 +36,11 @@ int main()
         cv::cvtColor( src, dst, CV_BGR2GRAY); 
 
 		{
-//			PerfLog  iPerf("dither");
+			PerfLog  iPerf("dither");
 
-			ImageHalftoning::ErrDiff_FloydSteinberg( dst.data, dst.step, dst.cols, dst.rows );
+//			ImageHalftoning::ErrDiff_LinearFloydSteinberg( dst.data, dst.step, dst.cols, dst.rows );
+			ImageHalftoning::ErrDiff_LinearStucki( dst.data, dst.step, dst.cols, dst.rows );
+//			ImageHalftoning::ErrDiff_FloydSteinberg( dst.data, dst.step, dst.cols, dst.rows );
 //			ImageHalftoning::ErrDiff_Burkes( dst.data, dst.step, dst.cols, dst.rows );
 //			ImageHalftoning::ErrDiff_Stucki( dst.data, dst.step, dst.cols, dst.rows );
 //			ImageHalftoning::ErrDiff_Atkinson( dst.data, dst.step, dst.cols, dst.rows );
