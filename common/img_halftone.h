@@ -1,3 +1,7 @@
+#ifndef	__IMG_HALFTONE_H_INCLUDED__
+#define	__IMG_HALFTONE_H_INCLUDED__
+
+#include <stdint.h>
 #include <math.h>
 #include <vector>
 
@@ -6,7 +10,7 @@ namespace ImageHalftoning
 	class ErrDiffAdd
 	{
 	public:
-		ErrDiffAdd( unsigned char * pbImage, int stride, int width, int height )
+		ErrDiffAdd( uint8_t * pbImage, int stride, int width, int height )
 		{
 			m_pbImage	= pbImage;
 			m_nStride	= stride;
@@ -20,7 +24,7 @@ namespace ImageHalftoning
 			{
 				if( (0 <= x) && (x < m_nWidth) )
 				{
-					unsigned char* data	= &m_pbImage[ m_nStride * y + x ];
+					uint8_t* data	= &m_pbImage[ m_nStride * y + x ];
 					
 					value	+= data[0];
 					
@@ -37,13 +41,13 @@ namespace ImageHalftoning
 	};
 
 
-	void ErrDiff_FloydSteinberg( unsigned char * image, int stride, int width, int height )
+	void ErrDiff_FloydSteinberg( uint8_t * image, int stride, int width, int height )
 	{
 		ErrDiffAdd	iEDA( image, stride, width, height );
 		
 		for( int y = 0; y < height; y++ )
 		{
-			unsigned char* line	= image + stride * y;
+			uint8_t* line	= image + stride * y;
 
 			for( int x = 0; x < width; x++ )
 			{
@@ -64,13 +68,13 @@ namespace ImageHalftoning
 	}
 
 
-	void    ErrDiff_Burkes( unsigned char * image, int stride, int width, int height )
+	void    ErrDiff_Burkes( uint8_t* image, int stride, int width, int height )
 	{
 		ErrDiffAdd	iEDA( image, stride, width, height );
 		
 		for( int y = 0; y < height; y++ )
 		{
-			unsigned char* line	= image + stride * y;
+			uint8_t* line	= image + stride * y;
 
 			for( int x = 0; x < width; x++ )
 			{
@@ -94,13 +98,13 @@ namespace ImageHalftoning
 	}
 
 
-	void    ErrDiff_Stucki( unsigned char * image, int stride, int width, int height )
+	void    ErrDiff_Stucki( uint8_t * image, int stride, int width, int height )
 	{
 		ErrDiffAdd	iEDA( image, stride, width, height );
 		
 		for( int y = 0; y < height; y++ )
 		{
-			unsigned char* line	= image + stride * y;
+			uint8_t* line	= image + stride * y;
 
 			for( int x = 0; x < width; x++ )
 			{
@@ -131,13 +135,13 @@ namespace ImageHalftoning
 	}
 
 
-	void    ErrDiff_Atkinson( unsigned char * image, int stride, int width, int height )
+	void    ErrDiff_Atkinson( uint8_t * image, int stride, int width, int height )
 	{
 		ErrDiffAdd	iEDA( image, stride, width, height );
 		
 		for( int y = 0; y < height; y++ )
 		{
-			unsigned char* line	= image + stride * y;
+			uint8_t* line	= image + stride * y;
 
 			for( int x = 0; x < width; x++ )
 			{
@@ -162,7 +166,7 @@ namespace ImageHalftoning
 	}
 
 
-	void    ErrDiff_LinearFloydSteinberg( unsigned char * image, int stride, int width, int height )
+	void    ErrDiff_LinearFloydSteinberg( uint8_t * image, int stride, int width, int height )
 	{
 		int					shift	= 20;
 		int					gamma[256];
@@ -170,14 +174,14 @@ namespace ImageHalftoning
 
 		for( int i = 0; i < 256; i++ )
 		{
-			gamma[i]	= (int)(pow( i / 255.0, 2.2 ) *((1 << shift) - 1));
+			gamma[i]	= (int)(pow( i / 255.0, 2.2 ) * ((1 << shift) - 1));
 		}
 		
 		for( int y = 0; y < height; y++ )
 		{
-			unsigned char*	src_line	= image + stride * y;
-			int *			dst_line	= &data.data()[ width * y ];
-			int				x			= 0;
+			uint8_t*	src_line	= image + stride * y;
+			int *		dst_line	= &data.data()[ width * y ];
+			int			x			= 0;
 
 			for( ; (x+4) <= width; x += 4 )
 			{
@@ -196,8 +200,8 @@ namespace ImageHalftoning
 
 		for( int y = 0; y < height; y++ )
 		{
-			int*			line		= &data.data()[ width * y ];
-			unsigned char*	dst_line	= image + stride * y;
+			int*		line		= &data.data()[ width * y ];
+			uint8_t*	dst_line	= image + stride * y;
 
 			for( int x = 0; x < width; x++ )
 			{
@@ -221,9 +225,8 @@ namespace ImageHalftoning
 			}
 		}
 	}
-
-
-	void    ErrDiff_LinearStucki( unsigned char * image, int stride, int width, int height )
+	
+	void    ErrDiff_LinearStucki( uint8_t * image, int stride, int width, int height )
 	{
 		int					shift	= 20;
 		int					gamma[256];
@@ -236,9 +239,9 @@ namespace ImageHalftoning
 		
 		for( int y = 0; y < height; y++ )
 		{
-			unsigned char*	src_line	= image + stride * y;
-			int *			dst_line	= &data.data()[ width * y ];
-			int				x			= 0;
+			uint8_t*	src_line	= image + stride * y;
+			int *		dst_line	= &data.data()[ width * y ];
+			int			x			= 0;
 
 			for( ; (x+4) <= width; x += 4 )
 			{
@@ -257,8 +260,8 @@ namespace ImageHalftoning
 
 		for( int y = 0; y < height; y++ )
 		{
-			int*			line		= &data.data()[ width * y ];
-			unsigned char*	dst_line	= image + stride * y;
+			int*		line		= &data.data()[ width * y ];
+			uint8_t*	dst_line	= image + stride * y;
 
 			for( int x = 0; x < width; x++ )
 			{
@@ -299,7 +302,7 @@ namespace ImageHalftoning
 	}
 
 
-	void PatternDither_2x2( unsigned char * image, int stride, int width, int height )
+	void PatternDither_2x2( uint8_t * image, int stride, int width, int height )
 	{
 		for( int y = 0; (y+2) <= height; y += 2)
 		{
@@ -357,3 +360,6 @@ namespace ImageHalftoning
 		}
 	}
 };
+
+
+#endif	// __IMG_HALFTONE_H_INCLUDED__

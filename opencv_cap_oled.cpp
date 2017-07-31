@@ -1,16 +1,15 @@
 
-#include "common/i2c_oled_ssd1306.h"
+#include "common/display_ssd1306_i2c.h"
 #include "common/img_halftone.h"
 #include "common/perf_log.h"
 
 #include <opencv2/opencv.hpp>
 
-
+//  apt-get install libcv-dev libopencv-dev
 
 int main()
 {
-    I2C_OLED_SSD1306  oled;
-
+    Display_SSD1306_i2c disp(180,0);
     cv::VideoCapture    cap(0);
 
     if(!cap.isOpened()) 
@@ -23,8 +22,9 @@ int main()
     cap.set( CV_CAP_PROP_FRAME_HEIGHT, 360 );
     cap.set( CV_CAP_PROP_FPS, 30 );
 
-    oled.Init();
-    oled.DisplayOn();
+    disp.Init();
+    disp.DispClear();
+    disp.DispOn();
     
     while( 1 )
     {
@@ -32,14 +32,14 @@ int main()
 
         cap >> src;
 
-        cv::resize( src, src, cv::Size(128,64), 0, 0, cv::INTER_LANCZOS4 );
+        cv::resize( src, src, cv::Size(disp.GetSize().width,disp.GetSize().height), 0, 0, cv::INTER_AREA );
         cv::cvtColor( src, dst, CV_BGR2GRAY); 
 
 		{
 			PerfLog  iPerf("dither");
 
-//			ImageHalftoning::ErrDiff_LinearFloydSteinberg( dst.data, dst.step, dst.cols, dst.rows );
-			ImageHalftoning::ErrDiff_LinearStucki( dst.data, dst.step, dst.cols, dst.rows );
+			ImageHalftoning::ErrDiff_LinearFloydSteinberg( dst.data, dst.step, dst.cols, dst.rows );
+//			ImageHalftoning::ErrDiff_LinearStucki( dst.data, dst.step, dst.cols, dst.rows );
 //			ImageHalftoning::ErrDiff_FloydSteinberg( dst.data, dst.step, dst.cols, dst.rows );
 //			ImageHalftoning::ErrDiff_Burkes( dst.data, dst.step, dst.cols, dst.rows );
 //			ImageHalftoning::ErrDiff_Stucki( dst.data, dst.step, dst.cols, dst.rows );
@@ -51,7 +51,7 @@ int main()
 //		cv::imwrite("dst.png",dst);
 
 //		PerfLog  iPerf("disp");
-		oled.WriteImage(dst.data, dst.step);
+		disp.WriteImageGRAY( 0, 0, dst.data, dst.step, dst.cols, dst.rows );
 	}
 
     return  0;

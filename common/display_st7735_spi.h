@@ -1,0 +1,58 @@
+
+#include "display_rgb565_spi.h"
+
+class Display_ST7735_spi : public Display_RGB565_spi8
+{
+public:
+	Display_ST7735_spi( int nRotate, int nGpioDC=1, int nGpioReset=201, int nGpioBackLight=65 ) :
+		Display_RGB565_spi8(
+			128,
+			160,
+			0,
+			nRotate,
+			nGpioDC,
+			nGpioReset,
+			nGpioBackLight,
+			10 * 1000000 )
+	{
+	}
+
+	virtual	int	Init()
+	{
+		if( 0 != Display_RGB565_spi8::Init() )
+		{
+			return	-1;
+		}
+		
+		// FRMCTR1,2,3
+		// Frame rate =fosc/((RTNA + 20) x (LINE + FPA + BPA))
+		//			  = 333k / ((0x01+20) x (LINE + 0x2C + 0x2D)) = 63.68 fps
+//		SpiWrite(	0xB1, 0x01, 0x2C, 0x2D );
+
+		// INVCTR
+		SpiWrite(	0xB4, 0x07 );
+		
+		// PWCTR1,2,3,4
+		SpiWrite(	0xC0, 0xA2, 0x02, 0x84 );
+		SpiWrite(	0xC1, 0xC5 );
+		SpiWrite(	0xC2, 0x0A, 0x00 );
+		SpiWrite(	0xC3, 0x8A, 0x2A );
+		SpiWrite(	0xC4, 0x8A, 0xEE );
+
+		// VMCTR1
+		SpiWrite(	0xC5, 0x0E );
+		
+		// INVOFF
+		SpiWrite(	0x20 );
+
+		// GMCTRP1
+		// GMCTRN1
+		SpiWrite(	0xE0, 0x02, 0x1c, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2d, 0x29, 0x25, 0x2B, 0x39, 0x00, 0x01, 0x03, 0x10 );
+		SpiWrite(	0xE1, 0x03, 0x1d, 0x07, 0x06, 0x2E, 0x2C, 0x29, 0x2D, 0x2E, 0x2E, 0x37, 0x3F, 0x00, 0x00, 0x02, 0x10 );
+      
+		// NORON
+		SpiWrite(	0x13 );
+
+		return	0;
+	}
+};
