@@ -4,12 +4,13 @@
 class Display_ILI9225_spi : public Display_RGB565_spi16
 {
 public:
-	Display_ILI9225_spi( int nRotate, int nGpioDC=1, int nGpioReset=201, int nGpioBackLight=65 ) :
+	Display_ILI9225_spi( int nRotate, int nGpioCS=-1, int nGpioDC=1, int nGpioReset=201, int nGpioBackLight=65 ) :
 		Display_RGB565_spi16(
 			176,
 			220,
-			DISP_CTRL_MIRROR_H | DISP_CTRL_BGR,
+			DISP_CTRL_MIRROR_V | DISP_CTRL_BGR,
 			nRotate,
+			nGpioCS,
 			nGpioDC,
 			nGpioReset,
 			nGpioBackLight,
@@ -90,6 +91,7 @@ public:
 protected:
 	virtual	int		TransferRGB565( int x, int y, int cx, int cy, const uint8_t * image )
 	{
+		int		ret;
 		uint8_t	WriteData[2]	= { 0x00, 0x22 };
 
 		int	xs	= x;
@@ -139,9 +141,13 @@ protected:
 		}
 
 		// ILI9225:	8.2.17. Write Data to GRAM (R22h)
+		m_iCS	<< 0;
 		m_iDC	<< 0;
 		m_iSPI	<< WriteData;
 		m_iDC	<< 1;
-		return	m_iSPI.write( image, cx * 2 * cy );		
+		ret		= m_iSPI.write( image, cx * 2 * cy );
+		m_iCS	<< 1;
+		
+		return	ret;
 	}
 };

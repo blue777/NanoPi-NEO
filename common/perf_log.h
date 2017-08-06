@@ -9,12 +9,12 @@ public:
     PerfLog( const std::string &str )
     {
         m_str   = str;
-        m_start = std::chrono::system_clock::now();
+        m_start = std::chrono::high_resolution_clock::now();
     }
 
     ~PerfLog()
     {
-        m_end = std::chrono::system_clock::now();
+        m_end = std::chrono::high_resolution_clock::now();
         
         double elapsed = std::chrono::duration_cast<std::chrono::microseconds>(m_end-m_start).count();
 
@@ -23,6 +23,6 @@ public:
 
 protected:
     std::string     m_str;
-    std::chrono::system_clock::time_point   m_start;
-    std::chrono::system_clock::time_point   m_end;
+    std::chrono::high_resolution_clock::time_point   m_start;
+    std::chrono::high_resolution_clock::time_point   m_end;
 };

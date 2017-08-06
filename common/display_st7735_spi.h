@@ -4,12 +4,13 @@
 class Display_ST7735_spi : public Display_RGB565_spi8
 {
 public:
-	Display_ST7735_spi( int nRotate, int nGpioDC=1, int nGpioReset=201, int nGpioBackLight=65 ) :
+	Display_ST7735_spi( int nRotate, int nGpioCS=-1, int nGpioDC=1, int nGpioReset=201, int nGpioBackLight=65 ) :
 		Display_RGB565_spi8(
 			128,
 			160,
 			0,
 			nRotate,
+			nGpioCS,
 			nGpioDC,
 			nGpioReset,
 			nGpioBackLight,

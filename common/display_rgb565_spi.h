@@ -28,17 +28,21 @@ public:
 		int	nDDRAM_Height,
 		int nDispCtrl,
 		int	nRotate,
+		int nGpioCS,
 		int nGpioDC,
 		int nGpioReset,
 		int nGpioBackLight = -1,
-		int	nSpiSpeed = 10000000 ) :
+		int	nSpiSpeed = 10000000,
+		int nSpiMode = SPI_MODE_0 ) :
 		m_tDDRAM(nDDRAM_Width,nDDRAM_Height),
-		m_iDC( nGpioDC),
+		m_iCS( nGpioCS ),
+		m_iDC( nGpioDC ),
 		m_iRST(nGpioReset),
 		m_iBL( nGpioBackLight),
-		m_iSPI( nSpiSpeed, SPI_MODE_0 )
+		m_iSPI( nSpiSpeed, nSpiMode )
 	{
 		// Set initial state
+		m_iCS	<< 1;
 		m_iBL	<< 0;	// Backlight Off
 		m_iRST	<< 1;	// Reset = high
 		m_iDC	<< 0;	// CommandMode
@@ -148,6 +152,7 @@ protected:
 	const DispSize			m_tDDRAM;
 	int						m_nDispCtrl; 
 	ctrl_spi				m_iSPI;
+	GpioOut					m_iCS;
 	GpioOut 				m_iRST;
 	GpioOut 				m_iDC;
 	GpioOut 				m_iBL;
@@ -163,11 +168,13 @@ public:
 		int	nDDRAM_height,
 		int nDispCtrl,
 		int	nRotate,
+		int	nGpioCS,
 		int nGpioDC,
 		int nGpioReset,
 		int nGpioBackLight = -1,
-		int	nSpiSpeed = 10000000 ) :
-		Display_RGB565_spi( nDDRAM_width, nDDRAM_height, nDispCtrl, nRotate, nGpioDC, nGpioReset, nGpioBackLight, nSpiSpeed )
+		int	nSpiSpeed = 10000000,
+		int nSpiMode = SPI_MODE_0 ) :
+		Display_RGB565_spi( nDDRAM_width, nDDRAM_height, nDispCtrl, nRotate, nGpioCS, nGpioDC, nGpioReset, nGpioBackLight, nSpiSpeed, nSpiMode )
 	{
 	}
 
@@ -198,6 +205,12 @@ public:
 		// ST7735:	10.1.29 COLMOD (3Ah): Interface Pixel Format
 		SpiWrite(	0x3A,
 					0x05 );	// RGB565
+		
+		// ILI9341: 8.2.15. Display Inversion OFF (20h)
+		SpiWrite(	0x20 );
+		
+		// ILI9341: 8.2.14. Normal Display Mode ON (13h)
+		SpiWrite(	0x13 );
 
 		return	Display_RGB565_spi::Init();
 	}
@@ -246,6 +259,9 @@ protected:
 	{
 		uint8_t	data[]	= { (uint8_t)args... };
 
+		// ChipSelect
+		m_iCS	<< 0;
+
 		// Command
 		m_iDC	<< 0;
 		m_iSPI.write( &cmd, sizeof(cmd) );
@@ -255,10 +271,13 @@ protected:
 			m_iDC	<< 1;
 			m_iSPI.write( data, sizeof(data) );
 		}
+		
+		m_iCS	<< 1;
 	}
 
 	virtual	int		TransferRGB565( int x, int y, int cx, int cy, const uint8_t * image )
 	{
+		int		ret;
 		int		ex		= x+cx-1;
 		int		ey		= y+cy-1;
 		
@@ -277,11 +296,14 @@ protected:
 					(0xFF & ey) );
 
 		// 10.1.21 RAMWR (2Ch): Memory Write
+		m_iCS	<< 0;
 		m_iDC	<< 0;
 		m_iSPI	<< 0x2C;
 		m_iDC	<< 1;
-		
-		return	m_iSPI.write( image, cx * 2 * cy );		
+		ret		= m_iSPI.write( image, cx * 2 * cy );
+		m_iCS	<< 1;
+
+		return	ret;		
 	}
 };
 
@@ -294,11 +316,13 @@ public:
 		int	nDDRAM_height,
 		int nDispCtrl,
 		int	nRotate,
+		int nGpioCS,
 		int nGpioDC,
 		int nGpioReset,
 		int nGpioBackLight = -1,
-		int	nSpiSpeed = 10000000 ) :
-		Display_RGB565_spi( nDDRAM_width, nDDRAM_height, nDispCtrl, nRotate, nGpioDC, nGpioReset, nGpioBackLight, nSpiSpeed )
+		int	nSpiSpeed = 10000000,
+		int nSpiMode = SPI_MODE_0 ) :
+		Display_RGB565_spi( nDDRAM_width, nDDRAM_height, nDispCtrl, nRotate, nGpioCS, nGpioDC, nGpioReset, nGpioBackLight, nSpiSpeed, nSpiMode )
 	{
 	}
 
@@ -309,11 +333,15 @@ protected:
 		uint8_t	cmd[2]	= { ((uint8_t*)&_cmd)[1],  ((uint8_t*)&_cmd)[0] };
 		uint8_t	data[2]	= { ((uint8_t*)&_data)[1], ((uint8_t*)&_data)[0] };
 		
+		m_iCS	<< 0;
+
 		m_iDC	<< 0;
 		m_iSPI	<< cmd;	
 
 		m_iDC	<< 1;
 		m_iSPI	<< data;
+
+		m_iCS	<< 1;
 	}
 };
 

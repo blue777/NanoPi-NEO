@@ -34,10 +34,85 @@
 #include "common/perf_log.h"
 
 #include "common/display_st7735_spi.h"
+#include "common/display_ili9328_spi.h"
 #include "common/display_ili9341_spi.h"
 #include "common/display_ili9225_spi.h"
 #include "common/display_ssd1306_i2c.h"
 
+
+void	CreateTestPattern( cv::Mat& image, int cx, int cy )
+{
+	int		blk_y	= cy / 6;
+	int		next_y	= cy - blk_y * 5;
+	int		y		= 0;
+
+	image	= cv::Mat::zeros( cy, cx, CV_8UC4 );
+
+	// Dot
+	for( y = 0; y < next_y; y++ )
+	{
+		for( int x = 0; x < cx; x++ )
+		{
+			if( 1 & (x+y) )
+			{
+				image.at<cv::Vec4b>(y,x)	= cv::Vec4b(255,255,255,255);
+			}
+		}
+	}
+	
+
+	// Graygradation
+	y		= next_y;
+	next_y	+= blk_y * 2;
+	for( int x = 0; x < 256; x++ )
+	{
+		cv::rectangle(
+			image,
+			cv::Point2i( (x+0) * cx / 256, y ),
+			cv::Point2i( (x+1) * cx / 256, next_y),
+			cv::Scalar(x,x,x,x),	// B,G,R,A
+			CV_FILLED );
+	}
+
+	// Red
+	y		= next_y;
+	next_y	+= blk_y;
+	for( int x = 0; x < 256; x++ )
+	{
+		cv::rectangle(
+			image,
+			cv::Point2i( (x+0) * cx / 256, y ),
+			cv::Point2i( (x+1) * cx / 256, next_y),
+			cv::Scalar(0,0,x,255),	// B,G,R,A
+			CV_FILLED );
+	}
+
+	// Green
+	y		= next_y;
+	next_y	+= blk_y;
+	for( int x = 0; x < 256; x++ )
+	{
+		cv::rectangle(
+			image,
+			cv::Point2i( (x+0) * cx / 256, y ),
+			cv::Point2i( (x+1) * cx / 256, next_y),
+			cv::Scalar(0,x,0,255),	// B,G,R,A
+			CV_FILLED );
+	}
+
+	// Blue
+	y		= next_y;
+	next_y	+= blk_y;
+	for( int x = 0; x < 256; x++ )
+	{
+		cv::rectangle(
+			image,
+			cv::Point2i( (x+0) * cx / 256, y ),
+			cv::Point2i( (x+1) * cx / 256, next_y),
+			cv::Scalar(x,0,0,255),	// B,G,R,A
+			CV_FILLED );
+	}
+}
 
 int main()
 {
@@ -46,11 +121,11 @@ int main()
 
 //	display.push_back( new Display_SSD1306_i2c(180) );		// for SSD1306
 //	display.push_back( new Display_SSD1306_i2c(180,2) );	// for SH1106
-//	display.push_back( new Display_ST7735_spi(180) );		// for KMR1.8
+//	display.push_back( new Display_ILI9341_spi_TM24(0) );	// for Tianma2.4" Panel
 	display.push_back( new Display_ILI9341_spi_TM22(0) );	// for Tianma2.2" Panel
-//	display.push_back( new Display_ILI9341_spi_TM24(180) );	// for Tianma2.4" Panel
-//	display.push_back( new Display_ILI9341_spi(270) );		// fpr basic ILI9341
-//	display.push_back( new Display_ILI9225_spi(180) );		// for basic ILI9225
+//	display.push_back( new Display_ILI9328_spi_TM22(0) );	// for Tianma2.2" Panel
+//	display.push_back( new Display_ILI9225_spi(0) );		// for basic ILI9225
+//	display.push_back( new Display_ST7735_spi(180) );		// for KMR1.8
 
 	////////////////////////////////////////////////////////////////
 	// DisplayIF::Init()
@@ -81,6 +156,21 @@ int main()
 	{
 		it->DispClear();
 	}
+
+	////////////////////////////////////////////////////////////////
+	// DisplayIF::WriteImageBGRA()
+	////////////////////////////////////////////////////////////////
+	printf( "Hit any key to DisplayIF::WriteImageBGRA() TestPattern\n");
+	getchar();
+	for( auto it : display )
+	{
+		cv::Mat	img;
+		
+		CreateTestPattern( img, it->GetSize().width, it->GetSize().height );
+
+		it->WriteImageBGRA( 0, 0, img.data, img.step, img.cols, img.rows );
+	}
+
 
 	////////////////////////////////////////////////////////////////
 	// DisplayIF::WriteImageGRAY()
