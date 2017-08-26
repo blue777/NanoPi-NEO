@@ -3,8 +3,8 @@
 
 //	`freetype-config --cflags` `freetype-config --libs`
 
-
 //	https://www.freetype.org/freetype2/docs/reference/ft2-index.html
+//	https://www.freetype.org/freetype2/docs/tutorial/step2.html
 //	https://www.freetype.org/freetype2/docs/tutorial/example1.c
 //	https://www.freetype.org/freetype2/docs/tutorial/example2.cpp
 
@@ -22,64 +22,86 @@ class	ImageFont
 public:
 	ImageFont( const char* filename, uint32_t height, bool isFitHeight=true )
 	{
-		FT_Error	error;
+		FT_Error			error;
+		FT_Size_RequestRec	tReqSize;
 
-		m_nFontHeight	= height;
+		// initialize member var.
+		m_nBaseline		= height;
 		m_piLibrary		= NULL;
 		m_piFace		= NULL;
 
 		error	= FT_Init_FreeType( &m_piLibrary );
 		if( 0 != error )
 		{
-			throw;
+			throw	"ERROR: FT_Init_FreeType()";
 		}
 
 		error	= FT_New_Face( m_piLibrary, filename, 0, &m_piFace );
 		if( 0 != error )
 		{
-			throw;
+			throw	"ERROR: FT_New_Face";
 		}
 		
+	    tReqSize.type			= FT_SIZE_REQUEST_TYPE_NOMINAL;
+	    tReqSize.width			= 0;
+	    tReqSize.height			= (height << 6);
+	    tReqSize.horiResolution	= 0;
+	    tReqSize.vertResolution	= 0;
+
 		if( isFitHeight )
 		{
-			int		cx, cy;
+			//	b. Scaled Global Metrics
+			int		yMax	= m_piFace->bbox.yMax;
+			int		yMin	= m_piFace->bbox.yMin;
 
-			error	= FT_Set_Pixel_Sizes( m_piFace, 0, m_nFontHeight);
-			if( 0 != error )
-			{
-				throw;
-			}
+			m_nBaseline		= height * yMax / (yMax - yMin);
 
-			if( 0 == CalcSize( cx, cy, "_gjpqy({[" ) )
-			{
-				m_nFontHeight	= (m_nFontHeight * m_nFontHeight * 4 + cy) / (cy * 4);
-			}
-			else
-			{
-				throw;
-			}
-
-			error	= FT_Set_Pixel_Sizes( m_piFace, 0, m_nFontHeight );
-			if( 0 != error )
-			{
-				throw;
-			}
-			
-/*
-			if( 0 == CalcSize( cx, cy, "_gjpqy({[" ) )
-			{
-				printf( "%d --> %d\n", height, cy );
-			}
-//*/
+			tReqSize.type	= FT_SIZE_REQUEST_TYPE_BBOX;
+		    tReqSize.height	= (height << 6);
 		}
-		else
+
+		error	= FT_Request_Size( m_piFace, &tReqSize );
+		if( 0 != error )
 		{
-			error	= FT_Set_Pixel_Sizes( m_piFace, 0, m_nFontHeight );
-			if( 0 != error )
-			{
-				throw;
-			}
+			throw	"ERROR: FT_Request_Size()";
 		}
+
+/*
+		{
+			int	cx	= 0;
+			int	cy	= 0;
+
+			CalcSize( cx, cy, "({[_gjpqy" );
+
+			printf(
+				"font metrics\n"
+				" global.units_per_EM        = %d\n"
+				" global.ascender            = %6.3f\n"
+				" global.descender           = %6.3f\n"
+				" global.height              = %6.3f\n"
+				" gloval.bbox.yMax           = %6.3f\n"
+				" gloval.bbox.yMin           = %6.3f\n"
+				" global.underline_position  = %6.3f\n"
+				" global.underline_thickness = %6.3f\n"
+				" scaled.ascender            = %6.1f\n"
+				" scaled.descender           = %6.1f\n"
+				" baseline                   = %d\n"
+				" %d --> %d\n",
+				m_piFace->units_per_EM,       
+				m_piFace->ascender / (double)m_piFace->units_per_EM,
+				m_piFace->descender / (double)m_piFace->units_per_EM,
+				m_piFace->height / (double)m_piFace->units_per_EM,
+				m_piFace->bbox.yMax / (double)m_piFace->units_per_EM,
+				m_piFace->bbox.yMin / (double)m_piFace->units_per_EM,
+				m_piFace->underline_position / (double)m_piFace->units_per_EM,
+				m_piFace->underline_thickness / (double)m_piFace->units_per_EM,
+				m_piFace->size->metrics.ascender / 64.0f,
+				m_piFace->size->metrics.descender / 64.0f,
+				m_nBaseline,
+				height,
+				cy );
+		}
+//*/
 	}
 	
 
@@ -113,7 +135,7 @@ public:
 			error	= FT_Load_Char( m_piFace, u32str[i], FT_LOAD_RENDER );
 			if( 0 == error )
 			{
-				int	font_height	= m_nFontHeight - slot->bitmap_top + slot->bitmap.rows;
+				int	font_height	= m_nBaseline - slot->bitmap_top + slot->bitmap.rows;
 
 				if( height < font_height )
 				{
@@ -151,7 +173,7 @@ public:
 			if( 0 == error )
 			{
 				int	bmp_cy	= slot->bitmap.rows;
-				int	pos_y	= y + m_nFontHeight - slot->bitmap_top;
+				int	pos_y	= y + m_nBaseline - slot->bitmap_top;
 				int	rs		= 0 <= pos_y ? 0 : -pos_y;
 				int	re		= (pos_y + bmp_cy) <= cy ? bmp_cy : (cy - pos_y);
 
@@ -210,7 +232,7 @@ public:
 			if( 0 == error )
 			{
 				int	bmp_cy	= slot->bitmap.rows;
-				int	pos_y	= y + m_nFontHeight - slot->bitmap_top;
+				int	pos_y	= y + m_nBaseline - slot->bitmap_top;
 				int	rs		= 0 <= pos_y ? 0 : -pos_y;
 				int	re		= (pos_y + bmp_cy) <= cy ? bmp_cy : (cy - pos_y);
 
@@ -257,9 +279,9 @@ public:
 	}
 
 protected:
-	int				m_nFontHeight;
 	FT_Library		m_piLibrary;
 	FT_Face			m_piFace;
+	int				m_nBaseline;
 };
 
 #endif	// __IMG_FONT_H_INCLUDED__
