@@ -111,22 +111,25 @@ public:
 		FT_Done_FreeType( m_piLibrary );
 	}
 
-	int	CalcSize( int& width, int& height, const char* str )
+	int	CalcRect( int& left, int& top, int& right, int& bottom, const char* str )
 	{
 		std::u32string	u32str	= std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t>().from_bytes(str);
 
-		return	CalcSize( width, height, u32str );
+		return	CalcRect( left, top, right, bottom, u32str );
 	}
 
-	int	CalcSize( int& width, int& height, const std::u32string& u32str )
+	int	CalcRect( int& left, int& top, int& right, int& bottom, const std::u32string& u32str )
 	{
 		FT_Error		error;
 		FT_GlyphSlot	slot	= m_piFace->glyph;
 		FT_Matrix		matrix	= { 1 << 16, 0, 0, 1 << 16 };
 		FT_Vector		pen		= { 0, 0 };
+		bool			isFirst	= true;
 
-		width	= 0;
-		height	= 0;
+		left	= 0;
+		top		= 0;
+		right	= 0;
+		bottom	= 0;
 
 		for( size_t i = 0; i < u32str.size(); i++ )
 		{
@@ -135,19 +138,32 @@ public:
 			error	= FT_Load_Char( m_piFace, u32str[i], FT_LOAD_RENDER );
 			if( 0 == error )
 			{
-				int	font_height	= m_nBaseline - slot->bitmap_top + slot->bitmap.rows;
+				int	l	= slot->bitmap_left;
+				int	r	= slot->bitmap_left + slot->bitmap.width;
+				int	t	= m_nBaseline - slot->bitmap_top;
+				int	b	= m_nBaseline - slot->bitmap_top + slot->bitmap.rows;
 
-				if( height < font_height )
+				if( !isFirst )
 				{
-					height	= font_height;
+					left	= left   < l ? left : l;
+					top		= top    < t ? top  : t;
+					right	= right  < r ? r : right;
+					bottom	= bottom < b ? b : bottom;
+				}
+				else
+				{
+					left	= l;
+					top		= t;
+					right	= r;
+					bottom	= b;
+					isFirst	= false;
 				}
 
 				pen.x	+= slot->advance.x;
 				pen.y	+= slot->advance.y;
 			}
 		}
-		
-		width	= pen.x >> 6;
+
 		return	0;
 	}
 	
