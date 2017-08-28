@@ -138,6 +138,11 @@ public:
 		
 		return	-1;
 	}
+	
+	virtual	int GetBPP()
+	{
+		return	16;
+	}
 
 protected:
 
@@ -251,6 +256,7 @@ public:
 
 		return	Display_RGB565_spi::Quit();
 	}
+
 
 protected:
 

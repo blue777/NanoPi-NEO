@@ -191,6 +191,11 @@ public:
 		
 		return	-1;
 	}
+	
+	virtual	int GetBPP()
+	{
+		return	1;
+	}
 
 protected:
 	bool    WriteCmd( unsigned char cmd )

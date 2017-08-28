@@ -45,6 +45,8 @@ public:
 	{
 		return  m_tDispSize;
 	}
+	
+	virtual	int			GetBPP()=0;
 
 protected:
 
