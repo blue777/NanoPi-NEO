@@ -68,10 +68,9 @@ public:
 
 /*
 		{
-			int	cx	= 0;
-			int	cy	= 0;
+			int	l,t,r,b;
 
-			CalcSize( cx, cy, "({[_gjpqy" );
+			CalcRect( l,t,r,b, "({[_gjpqy" );
 
 			printf(
 				"font metrics\n"
@@ -85,6 +84,7 @@ public:
 				" global.underline_thickness = %6.3f\n"
 				" scaled.ascender            = %6.1f\n"
 				" scaled.descender           = %6.1f\n"
+				" scaled.height              = %6.1f\n"
 				" baseline                   = %d\n"
 				" %d --> %d\n",
 				m_piFace->units_per_EM,       
@@ -97,9 +97,10 @@ public:
 				m_piFace->underline_thickness / (double)m_piFace->units_per_EM,
 				m_piFace->size->metrics.ascender / 64.0f,
 				m_piFace->size->metrics.descender / 64.0f,
+				m_piFace->size->metrics.height / 64.0f,
 				m_nBaseline,
 				height,
-				cy );
+				b );
 		}
 //*/
 	}
@@ -133,34 +134,52 @@ public:
 
 		for( size_t i = 0; i < u32str.size(); i++ )
 		{
-			FT_Set_Transform( m_piFace, &matrix, &pen );
-
-			error	= FT_Load_Char( m_piFace, u32str[i], FT_LOAD_RENDER );
-			if( 0 == error )
+			switch( u32str[i] )
 			{
-				int	l	= slot->bitmap_left;
-				int	r	= slot->bitmap_left + slot->bitmap.width;
-				int	t	= m_nBaseline - slot->bitmap_top;
-				int	b	= m_nBaseline - slot->bitmap_top + slot->bitmap.rows;
+			case '\r':
+				break;
 
-				if( !isFirst )
+			case '\t':
+				pen.x	+= m_piFace->size->metrics.height * 2;
+				pen.x	-= pen.x % (m_piFace->size->metrics.height * 2);
+				break;
+				
+			case '\n':
+				pen.x	= 0;
+				pen.y	-= m_piFace->size->metrics.height;
+				break;
+			
+			default:
+				FT_Set_Transform( m_piFace, &matrix, &pen );
+	
+				error	= FT_Load_Char( m_piFace, u32str[i], FT_LOAD_RENDER );
+				if( 0 == error )
 				{
-					left	= left   < l ? left : l;
-					top		= top    < t ? top  : t;
-					right	= right  < r ? r : right;
-					bottom	= bottom < b ? b : bottom;
+					int	l	= slot->bitmap_left;
+					int	r	= slot->bitmap_left + slot->bitmap.width;
+					int	t	= m_nBaseline - slot->bitmap_top;
+					int	b	= m_nBaseline - slot->bitmap_top + slot->bitmap.rows;
+	
+					if( !isFirst )
+					{
+						left	= left   < l ? left : l;
+						top		= top    < t ? top  : t;
+						right	= right  < r ? r : right;
+						bottom	= bottom < b ? b : bottom;
+					}
+					else
+					{
+						left	= l;
+						top		= t;
+						right	= r;
+						bottom	= b;
+						isFirst	= false;
+					}
+	
+					pen.x	+= slot->advance.x;
+					pen.y	+= slot->advance.y;
 				}
-				else
-				{
-					left	= l;
-					top		= t;
-					right	= r;
-					bottom	= b;
-					isFirst	= false;
-				}
-
-				pen.x	+= slot->advance.x;
-				pen.y	+= slot->advance.y;
+				break;
 			}
 		}
 
@@ -183,42 +202,60 @@ public:
 
 		for( size_t i = 0; i < u32str.size(); i++ )
 		{
-			FT_Set_Transform( m_piFace, &matrix, &pen );
-
-			error	= FT_Load_Char( m_piFace, u32str[i], FT_LOAD_RENDER );
-			if( 0 == error )
+			switch( u32str[i] )
 			{
-				int	bmp_cy	= slot->bitmap.rows;
-				int	pos_y	= y + m_nBaseline - slot->bitmap_top;
-				int	rs		= 0 <= pos_y ? 0 : -pos_y;
-				int	re		= (pos_y + bmp_cy) <= cy ? bmp_cy : (cy - pos_y);
+			case '\r':
+				break;
 
-				int	bmp_cx	= slot->bitmap.width;
-				int	pos_x	= x + slot->bitmap_left;
-				int	cs		= 0 <= pos_x ? 0 : -pos_x;
-				int	ce		= (pos_x + bmp_cx) <= cx ? bmp_cx : (cx - pos_x);
+			case '\t':
+				pen.x	+= m_piFace->size->metrics.height * 2;
+				pen.x	-= pen.x % (m_piFace->size->metrics.height * 2);
+				break;
 
-				for( int r = rs; r < re; r++ )
+			case '\n':
+				pen.x	= 0;
+				pen.y	-= m_piFace->size->metrics.height;
+				break;
+			
+			default:
+				FT_Set_Transform( m_piFace, &matrix, &pen );
+
+				error	= FT_Load_Char( m_piFace, u32str[i], FT_LOAD_RENDER );
+				if( 0 == error )
 				{
-					uint8_t *	src_line	= &slot->bitmap.buffer[ bmp_cx * r ];
-					uint8_t *	dst_line	= &image[ stride * (pos_y + r) + pos_x ];
-					int 		c			= cs;
-
-					for( ; c < ce; c++ )
+					int	bmp_cy	= slot->bitmap.rows;
+					int	pos_y	= y + m_nBaseline - slot->bitmap_top;
+					int	rs		= 0 <= pos_y ? 0 : -pos_y;
+					int	re		= (pos_y + bmp_cy) <= cy ? bmp_cy : (cy - pos_y);
+	
+					int	bmp_cx	= slot->bitmap.width;
+					int	pos_x	= x + slot->bitmap_left;
+					int	cs		= 0 <= pos_x ? 0 : -pos_x;
+					int	ce		= (pos_x + bmp_cx) <= cx ? bmp_cx : (cx - pos_x);
+	
+					for( int r = rs; r < re; r++ )
 					{
-						int32_t	a0	= src_line[c+0];
-
-						if( 0 < a0 )
+						uint8_t *	src_line	= &slot->bitmap.buffer[ bmp_cx * r ];
+						uint8_t *	dst_line	= &image[ stride * (pos_y + r) + pos_x ];
+						int 		c			= cs;
+	
+						for( ; c < ce; c++ )
 						{
-							int32_t	d0	= dst_line[c+0];
-							a0	+= a0 >> 7;
-							dst_line[c+0] = (uint8_t)( d0 + (((color - d0) * a0) >> 8) );
+							int32_t	a0	= src_line[c+0];
+	
+							if( 0 < a0 )
+							{
+								int32_t	d0	= dst_line[c+0];
+								a0	+= a0 >> 7;
+								dst_line[c+0] = (uint8_t)( d0 + (((color - d0) * a0) >> 8) );
+							}
 						}
 					}
+	
+					pen.x	+= slot->advance.x;
+					pen.y	+= slot->advance.y;
 				}
-
-				pen.x	+= slot->advance.x;
-				pen.y	+= slot->advance.y;
+				break;
 			}
 		}
 		
@@ -242,52 +279,70 @@ public:
 
 		for( size_t i = 0; i < u32str.size(); i++ )
 		{
-			FT_Set_Transform( m_piFace, &matrix, &pen );
-
-			error	= FT_Load_Char( m_piFace, u32str[i], FT_LOAD_RENDER );
-			if( 0 == error )
+			switch( u32str[i] )
 			{
-				int	bmp_cy	= slot->bitmap.rows;
-				int	pos_y	= y + m_nBaseline - slot->bitmap_top;
-				int	rs		= 0 <= pos_y ? 0 : -pos_y;
-				int	re		= (pos_y + bmp_cy) <= cy ? bmp_cy : (cy - pos_y);
+			case '\r':
+				break;
+				
+			case '\t':
+				pen.x	+= m_piFace->size->metrics.height * 2;
+				pen.x	-= pen.x % (m_piFace->size->metrics.height * 2);
+				break;
 
-				int	bmp_cx	= slot->bitmap.width;
-				int	pos_x	= x + slot->bitmap_left;
-				int	cs		= 0 <= pos_x ? 0 : -pos_x;
-				int	ce		= (pos_x + bmp_cx) <= cx ? bmp_cx : (cx - pos_x);
+			case '\n':
+				pen.x	= 0;
+				pen.y	-= m_piFace->size->metrics.height;
+				break;
 
-				for( int r = rs; r < re; r++ )
+			default:
+				FT_Set_Transform( m_piFace, &matrix, &pen );
+	
+				error	= FT_Load_Char( m_piFace, u32str[i], FT_LOAD_RENDER );
+				if( 0 == error )
 				{
-					uint8_t *	src_line	= &slot->bitmap.buffer[ bmp_cx * r ];
-					uint8_t *	dst_line	= &image[ stride * (pos_y + r) + (pos_x * 4) ];
-					int 		c			= cs;
-
-					for( ; c < ce; c++ )
+					int	bmp_cy	= slot->bitmap.rows;
+					int	pos_y	= y + m_nBaseline - slot->bitmap_top;
+					int	rs		= 0 <= pos_y ? 0 : -pos_y;
+					int	re		= (pos_y + bmp_cy) <= cy ? bmp_cy : (cy - pos_y);
+	
+					int	bmp_cx	= slot->bitmap.width;
+					int	pos_x	= x + slot->bitmap_left;
+					int	cs		= 0 <= pos_x ? 0 : -pos_x;
+					int	ce		= (pos_x + bmp_cx) <= cx ? bmp_cx : (cx - pos_x);
+	
+					for( int r = rs; r < re; r++ )
 					{
-						int32_t	a	= src_line[c+0];
-						
-						if( 0 < a )
+						uint8_t *	src_line	= &slot->bitmap.buffer[ bmp_cx * r ];
+						uint8_t *	dst_line	= &image[ stride * (pos_y + r) + (pos_x * 4) ];
+						int 		c			= cs;
+	
+						for( ; c < ce; c++ )
 						{
-							uint8_t*	clr	= (uint8_t*)&color;
-							int32_t		d0	= dst_line[c*4+0];
-							int32_t		d1	= dst_line[c*4+1];
-							int32_t		d2	= dst_line[c*4+2];
-							int32_t		d3	= dst_line[c*4+3];
-	
-							a	+= a >> 7;
-							a	*= alpha;
-	
-							dst_line[c*4+0] = (uint8_t)( ((d0 << 16) + (clr[0] - d0) * a) >> 16 );
-							dst_line[c*4+1] = (uint8_t)( ((d1 << 16) + (clr[1] - d1) * a) >> 16 );
-							dst_line[c*4+2] = (uint8_t)( ((d2 << 16) + (clr[2] - d2) * a) >> 16 );
-							dst_line[c*4+3] = (uint8_t)( ((d3 << 16) + (clr[3] - d3) * a) >> 16 );
+							int32_t	a	= src_line[c+0];
+							
+							if( 0 < a )
+							{
+								uint8_t*	clr	= (uint8_t*)&color;
+								int32_t		d0	= dst_line[c*4+0];
+								int32_t		d1	= dst_line[c*4+1];
+								int32_t		d2	= dst_line[c*4+2];
+								int32_t		d3	= dst_line[c*4+3];
+		
+								a	+= a >> 7;
+								a	*= alpha;
+		
+								dst_line[c*4+0] = (uint8_t)( ((d0 << 16) + (clr[0] - d0) * a) >> 16 );
+								dst_line[c*4+1] = (uint8_t)( ((d1 << 16) + (clr[1] - d1) * a) >> 16 );
+								dst_line[c*4+2] = (uint8_t)( ((d2 << 16) + (clr[2] - d2) * a) >> 16 );
+								dst_line[c*4+3] = (uint8_t)( ((d3 << 16) + (clr[3] - d3) * a) >> 16 );
+							}
 						}
 					}
+	
+					pen.x	+= slot->advance.x;
+					pen.y	+= slot->advance.y;
 				}
-
-				pen.x	+= slot->advance.x;
-				pen.y	+= slot->advance.y;
+				break;
 			}
 		}
 		
