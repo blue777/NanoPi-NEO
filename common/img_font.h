@@ -78,6 +78,8 @@ public:
 				" global.ascender            = %6.3f\n"
 				" global.descender           = %6.3f\n"
 				" global.height              = %6.3f\n"
+				" gloval.bbox.xMax           = %6.3f\n"
+				" gloval.bbox.xMin           = %6.3f\n"
 				" gloval.bbox.yMax           = %6.3f\n"
 				" gloval.bbox.yMin           = %6.3f\n"
 				" global.underline_position  = %6.3f\n"
@@ -85,12 +87,15 @@ public:
 				" scaled.ascender            = %6.1f\n"
 				" scaled.descender           = %6.1f\n"
 				" scaled.height              = %6.1f\n"
+				" scaled.max_advance         = %6.1f\n"
 				" baseline                   = %d\n"
 				" %d --> %d\n",
 				m_piFace->units_per_EM,       
 				m_piFace->ascender / (double)m_piFace->units_per_EM,
 				m_piFace->descender / (double)m_piFace->units_per_EM,
 				m_piFace->height / (double)m_piFace->units_per_EM,
+				m_piFace->bbox.xMax / (double)m_piFace->units_per_EM,
+				m_piFace->bbox.xMin / (double)m_piFace->units_per_EM,
 				m_piFace->bbox.yMax / (double)m_piFace->units_per_EM,
 				m_piFace->bbox.yMin / (double)m_piFace->units_per_EM,
 				m_piFace->underline_position / (double)m_piFace->units_per_EM,
@@ -98,6 +103,7 @@ public:
 				m_piFace->size->metrics.ascender / 64.0f,
 				m_piFace->size->metrics.descender / 64.0f,
 				m_piFace->size->metrics.height / 64.0f,
+				m_piFace->size->metrics.max_advance / 64.0f,
 				m_nBaseline,
 				height,
 				b );
@@ -140,8 +146,8 @@ public:
 				break;
 
 			case '\t':
-				pen.x	+= m_piFace->size->metrics.height * 2;
-				pen.x	-= pen.x % (m_piFace->size->metrics.height * 2);
+				pen.x	+= m_piFace->size->metrics.max_advance * 4;
+				pen.x	-= pen.x % (m_piFace->size->metrics.max_advance * 4);
 				break;
 				
 			case '\n':
@@ -208,8 +214,8 @@ public:
 				break;
 
 			case '\t':
-				pen.x	+= m_piFace->size->metrics.height * 2;
-				pen.x	-= pen.x % (m_piFace->size->metrics.height * 2);
+				pen.x	+= m_piFace->size->metrics.max_advance * 4;
+				pen.x	-= pen.x % (m_piFace->size->metrics.max_advance * 4);
 				break;
 
 			case '\n':
@@ -285,8 +291,8 @@ public:
 				break;
 				
 			case '\t':
-				pen.x	+= m_piFace->size->metrics.height * 2;
-				pen.x	-= pen.x % (m_piFace->size->metrics.height * 2);
+				pen.x	+= m_piFace->size->metrics.max_advance * 4;
+				pen.x	-= pen.x % (m_piFace->size->metrics.max_advance * 4);
 				break;
 
 			case '\n':
