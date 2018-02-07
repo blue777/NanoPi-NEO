@@ -151,7 +151,7 @@ public:
 	
 				if( tInfo.fd < 0 )
 				{
-					throw	"ERROR: GpioInterruptCtrl(), open() failured.";
+					printf( "ERROR: GpioInterruptCtrl(), open(%s) failured.\n", (strPath+"value").c_str() );
 					return	false;	
 				}
 	
@@ -160,7 +160,7 @@ public:
 					char	val;
 					if( read( tInfo.fd, &val, 1 ) < 1 )
 					{
-						throw	"ERROR: GpioInterruptCtrl(), read() failured.";
+						printf( "ERROR: GpioInterruptCtrl(), read(%s) failured.\n", (strPath+"value").c_str() );
 						return	false;	
 					}
 				}
@@ -170,7 +170,7 @@ public:
 			}
 			else
 			{
-				throw	"ERROR: GpioInterruptCtrl() already registed.";
+				printf( "ERROR: GpioInterruptCtrl() already registed. gpio = %d\n", pin );
 				return	false;
 			}
 	
@@ -181,7 +181,7 @@ public:
 			int	ret	= epoll_ctl( m_epfd, EPOLL_CTL_ADD, ptInfo->fd, &tEvent );
 			if (0 != ret )
 			{
-				throw	"ERROR: GpioInterruptCtrl(), epoll_ctl failured";
+				printf( "ERROR: GpioInterruptCtrl(), epoll_ctl failured. gpio = %d\n", pin );
 				return	false;
 			}
 
