@@ -28,7 +28,7 @@ int main( int argc, char * argv[] )
 	
 	if( 0 == strcmp( argv[1], "r32" ) )
 	{
-		mode		= 'r32';
+		mode		= 'R';
 		num			= 16;
 
 		if( 3 < argc )
@@ -39,7 +39,7 @@ int main( int argc, char * argv[] )
 	}
 	else if( 0 == strcmp( argv[1], "w32") )
 	{
-		mode		= 'w32';
+		mode		= 'W';
 		block_size	= 4;
 		
 		if( argc < 4 )
@@ -62,7 +62,7 @@ int main( int argc, char * argv[] )
 	base_addr2map	= (void*)(((size_t)base_addr) >> 12 << 12);
 	block_size		+= (size_t)base_addr - (size_t)base_addr2map;
 
-	map_addr	= mmap( NULL, block_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, base_addr2map );
+	map_addr	= mmap( NULL, block_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, (off_t)base_addr2map );
 	if( map_addr == MAP_FAILED )
 	{
 		printf("ERROR! Cannot map physical addr to virtual addr. %p\n", base_addr );
@@ -75,7 +75,7 @@ int main( int argc, char * argv[] )
 	
 	switch( mode )
 	{
-	case 'r32':
+	case 'R':
 		{
 			uint32_t*	addr	= (uint32_t*)map_addr_target;
 			int			i;
@@ -87,7 +87,7 @@ int main( int argc, char * argv[] )
 		}
 		break;
 		
-	case 'w32':
+	case 'W':
 		{
 			uint32_t*	addr	= (uint32_t*)map_addr_target;
 			uint32_t	org		= addr[0];
