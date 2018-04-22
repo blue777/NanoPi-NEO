@@ -117,12 +117,57 @@ public:
 		FT_Done_Face( m_piFace );
 		FT_Done_FreeType( m_piLibrary );
 	}
+	
+	static	std::u32string	GetUnicode32fromUTF8( const char * str )
+	{
+/*
+		std::string		utf8	= str;
+		std::u32string	u32str;
+
+		for( size_t i = 0; i < utf8.size(); i++ )
+		{
+			uint32_t	c	= (uint32_t)utf8[i];
+
+			if( 0 == (0x80 & c) )
+			{
+				u32str.push_back( c );
+			}
+			else if( 0xC0 == (0xE0 & c) )
+			{
+				c	=  (uint32_t)(0x1F & utf8[i+0]) << 6;
+				c	|= (uint32_t)(0x3F & utf8[i+1]) << 0;
+				
+				i	+= 1;
+				u32str.push_back( c );
+			}
+			else if( 0xE0 == (0xF0 & c) )
+			{
+				c	=  (uint32_t)(0x0F & utf8[i+0]) << 12;
+				c	|= (uint32_t)(0x3F & utf8[i+1]) << 6;
+				c	|= (uint32_t)(0x3F & utf8[i+2]) << 0;
+				
+				i	+= 2;
+				u32str.push_back( c );
+			}
+			else if( 0xF0 == (0xF8 & c) )
+			{
+				c	=  (uint32_t)(0x07 & utf8[i+0]) << 18;
+				c	|= (uint32_t)(0x3F & utf8[i+1]) << 12;
+				c	|= (uint32_t)(0x3F & utf8[i+2]) << 6;
+				c	|= (uint32_t)(0x3F & utf8[i+3]) << 0;
+				
+				i	+= 3;
+				u32str.push_back( c );
+			}
+		}
+		return	u32str;
+*/
+		return	std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t>().from_bytes(str);
+	}
 
 	int	CalcRect( int& left, int& top, int& right, int& bottom, const char* str )
 	{
-		std::u32string	u32str	= std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t>().from_bytes(str);
-
-		return	CalcRect( left, top, right, bottom, u32str );
+		return	CalcRect( left, top, right, bottom, GetUnicode32fromUTF8( str ) );
 	}
 
 	int	CalcRect( int& left, int& top, int& right, int& bottom, const std::u32string& u32str )
@@ -194,9 +239,7 @@ public:
 	
 	int DrawTextGRAY( int x, int y, const char* str, uint8_t color, uint8_t * image, int stride, int cx, int cy )
 	{
-		std::u32string	u32str	= std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t>().from_bytes(str);
-
-		return	DrawTextGRAY( x, y, u32str, color, image, stride, cx, cy );
+		return	DrawTextGRAY( x, y, GetUnicode32fromUTF8(str), color, image, stride, cx, cy );
 	}
 
 	int DrawTextGRAY( int x, int y, const std::u32string& u32str, uint8_t color, uint8_t * image, int stride, int cx, int cy )
@@ -270,9 +313,7 @@ public:
 
 	int DrawTextBGRA( int x, int y, const char* str, uint32_t color, uint8_t * image, int stride, int cx, int cy )
 	{
-		std::u32string	u32str	= std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t>().from_bytes(str);
-
-		return	DrawTextBGRA( x, y, u32str, color, image, stride, cx, cy );
+		return	DrawTextBGRA( x, y, GetUnicode32fromUTF8(str), color, image, stride, cx, cy );
 	}
 	
 	int DrawTextBGRA( int x, int y, const std::u32string& u32str, uint32_t color, uint8_t * image, int stride, int cx, int cy )
