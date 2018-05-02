@@ -41,6 +41,10 @@ public:
 	virtual	int WriteImageBGRA( int x, int y, const uint8_t* image, int stride, int cx, int cy )=0;
 	virtual	int WriteImageGRAY( int x, int y, const uint8_t* image, int stride, int cx, int cy )=0;
 	
+	virtual	void Flush()
+	{
+	}
+
 	const DispSize&    GetSize()
 	{
 		return  m_tDispSize;
