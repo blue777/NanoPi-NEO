@@ -144,7 +144,7 @@ public:
 				std::ofstream( strPath+"direction" ) << "in";
 				std::ofstream( strPath+"edge" ) << "both";
 	
-				// opne gpio value
+				// open gpio value
 				tInfo.pin	= pin;
 				tInfo.func	= func;
 				tInfo.fd	= ::open( (strPath+"value").c_str(), O_RDWR | O_NONBLOCK);

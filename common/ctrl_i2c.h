@@ -39,11 +39,24 @@ public:
         if( size != wrote )
         {
             printf("ERROR! ctrl_i2c.write( *, %d ) ret %d\n", size, wrote );
-            return  "ERROR: ctrl_i2c::write(), write() failed.";
+            return  false;
         }
         
 //      printf("Success. i2c_base.write( *, %d ) ret %d\n", size, wrote );
         return  true;
+    }
+
+    bool    read( unsigned char * data, int size )
+    {
+        int read   = ::read( m_i2c, data, size );
+        
+        if( size != read )
+        { 
+            printf("ERROR! ctrl_i2c.read( *, %d ) ret %d\n", size, read );
+            return  false;
+        }
+
+        return  true;    
     }
 
 private:
