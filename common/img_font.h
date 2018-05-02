@@ -14,8 +14,8 @@
 
 #include <stdint.h>
 #include <string>
-#include <locale>
-#include <codecvt>
+//#include <locale>
+//#include <codecvt>
 
 class	ImageFont
 {
@@ -120,7 +120,6 @@ public:
 	
 	static	std::u32string	GetUnicode32fromUTF8( const char * str )
 	{
-/*
 		std::string		utf8	= str;
 		std::u32string	u32str;
 
@@ -134,35 +133,55 @@ public:
 			}
 			else if( 0xC0 == (0xE0 & c) )
 			{
-				c	=  (uint32_t)(0x1F & utf8[i+0]) << 6;
-				c	|= (uint32_t)(0x3F & utf8[i+1]) << 0;
-				
+				if( (i+1) < utf8.size() )
+				{
+					c	=  (uint32_t)(0x1F & utf8[i+0]) << 6;
+					c	|= (uint32_t)(0x3F & utf8[i+1]) << 0;
+				}
+				else
+				{
+					c	= '?';
+				}
+
 				i	+= 1;
 				u32str.push_back( c );
 			}
 			else if( 0xE0 == (0xF0 & c) )
 			{
-				c	=  (uint32_t)(0x0F & utf8[i+0]) << 12;
-				c	|= (uint32_t)(0x3F & utf8[i+1]) << 6;
-				c	|= (uint32_t)(0x3F & utf8[i+2]) << 0;
-				
+				if( (i+2) < utf8.size() )
+				{
+					c	=  (uint32_t)(0x0F & utf8[i+0]) << 12;
+					c	|= (uint32_t)(0x3F & utf8[i+1]) << 6;
+					c	|= (uint32_t)(0x3F & utf8[i+2]) << 0;
+				}
+				else
+				{
+					c	= '?';
+				}
+
 				i	+= 2;
 				u32str.push_back( c );
 			}
 			else if( 0xF0 == (0xF8 & c) )
 			{
-				c	=  (uint32_t)(0x07 & utf8[i+0]) << 18;
-				c	|= (uint32_t)(0x3F & utf8[i+1]) << 12;
-				c	|= (uint32_t)(0x3F & utf8[i+2]) << 6;
-				c	|= (uint32_t)(0x3F & utf8[i+3]) << 0;
+				if( (i+3) < utf8.size() )
+				{
+					c	=  (uint32_t)(0x07 & utf8[i+0]) << 18;
+					c	|= (uint32_t)(0x3F & utf8[i+1]) << 12;
+					c	|= (uint32_t)(0x3F & utf8[i+2]) << 6;
+					c	|= (uint32_t)(0x3F & utf8[i+3]) << 0;
+				}
+				else
+				{
+					c	= '?';
+				}
 				
 				i	+= 3;
 				u32str.push_back( c );
 			}
 		}
 		return	u32str;
-*/
-		return	std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t>().from_bytes(str);
+//		return	std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t>().from_bytes(str);
 	}
 
 	int	CalcRect( int& left, int& top, int& right, int& bottom, const char* str )
