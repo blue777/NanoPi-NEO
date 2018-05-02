@@ -140,7 +140,7 @@ public:
 	}
 
 protected:
-	virtual	int		TransferRGB565( int x, int y, int cx, int cy, const uint8_t * image )
+	virtual	int		TransferRGB(int x, int y, int cx, int cy, const uint8_t * image, int image_bytes )
 	{
 		int		ret;
 		uint8_t	WriteDataCmd[3]	= { 0x70, 0x00, 0x22 };
