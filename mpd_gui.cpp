@@ -1,5 +1,5 @@
 /******************************************************************************
-	Copyright (C) 2017 blue-7 (http://qiita.com/blue-7)
+	Copyright (C) 2017-2018 blue-7 (http://qiita.com/blue-7)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -19,9 +19,7 @@
 
 Required external packages:
 
-apt install libcv-dev libopencv-dev opencv-doc
-apt install fonts-takao-pgothic
-apt install libtag1-dev
+apt install libcv-dev libopencv-dev opencv-doc fonts-takao-pgothic libtag1-dev
 
 HowToCompile:
 
@@ -41,6 +39,7 @@ g++ -O3 -pthread -std=c++11 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags op
 #include "CoverArtExtractor.h"
 #include "usr_displays.h"
 
+
 #define	MUSIC_ROOT_PATH	"/media/"
 
 #define	FONT_PATH		"/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf"
@@ -51,85 +50,9 @@ g++ -O3 -pthread -std=c++11 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags op
 
 #define	GPIO_BUTTON_PREV	0
 #define	GPIO_BUTTON_NEXT	3
-#define	GPIO_BUTTON_TOGGLE	2
+#define	GPIO_BUTTON_PLAY	2
 
-
-
-void	SetupButtons( GpioInterruptCtrl& iGpioInt )
-{
-	iGpioInt.RegistPin(
-		GPIO_BUTTON_PREV,
-		[]( int value )
-		{
-			if( 1 == value )
-			{
-				Socket		iSock;
-				std::string	str;
-
-				iSock.connect( MPD_HOST, MPD_PORT );
-				iSock	<< "previous\n";
-				iSock	>> str;
-			}
-		});
-
-	iGpioInt.RegistPin(
-		GPIO_BUTTON_NEXT,
-		[]( int value )
-		{
-			if( 1 == value )
-			{
-				Socket		iSock;
-				std::string	str;
-
-				iSock.connect( MPD_HOST, MPD_PORT );
-				iSock	<< "next\n";
-				iSock	>> str;
-			}
-		});
-
-	iGpioInt.RegistPin(
-		GPIO_BUTTON_TOGGLE,
-		[]( int value )
-		{
-			if( 1 == value )
-			{
-				Socket		iSock;
-				std::string	str;
-	
-				iSock.connect( MPD_HOST, MPD_PORT );
-				
-				iSock	>> str;	// DummyRead
-				iSock	<< "status\n";
-				iSock	>> str;
-	
-				std::map<std::string,std::string>	iInfo;
-				std::string			line;
-				std::istringstream	stream(str);
-				while( std::getline( stream, line ))
-				{
-					std::string::size_type	pos	= line.find( ":" );
-					if( pos != std::string::npos )
-					{
-						std::string	field( line, 0, pos );
-						std::string	value( line, pos+2 );
-						
-						iInfo[field]	= value;
-					}
-				}
-				
-				if( iInfo["state"] == "play" )
-				{
-					iSock	<< "stop\n";
-				}
-				else
-				{
-					iSock	<< "play\n";
-				}
-
-				iSock	>> str;	// dummy read
-			}
-		});
-}
+//#define	VOLUME_CTRL_I2C_AK449x
 
 
 
@@ -274,7 +197,7 @@ public:
 			
 			x	= 0 < x ? 0 : x;
 
-			m_nOffsetX--;
+			m_nOffsetX -= (m_iDisp.GetSize().width + 239) / 240;
 			m_nOffsetX	= -m_iImage.cols <= m_nOffsetX ? m_nOffsetX : m_nRectWidth;
 
 			m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC4 );
@@ -291,6 +214,84 @@ protected:
 	ImageFont	m_iFont;
 	uint32_t	m_nColor;
 };
+
+
+class DrawArea_StaticText : public DrawAreaIF
+{
+public:
+	DrawArea_StaticText( const std::string& text, uint32_t color, DisplayIF& iDisplay, int x, int y, int cx, int cy, bool isRightAlign=false ) :
+		DrawAreaIF( iDisplay, x, y, cx, cy ),
+		m_iFont( FONT_PATH, m_nRectHeight )
+	{
+		m_strText		= text;
+		m_nColor		= color;
+		m_isRightAlign	= isRightAlign;
+	}
+
+	virtual	void	UpdateInfo( std::map<std::string,std::string>& map )
+	{
+		std::string	str	= m_strText;
+
+		if( m_nCurrent != str )
+		{
+			int	l,t,r,b;
+			m_iFont.CalcRect( l,t,r,b, str.c_str() );
+
+			m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC4 );
+			m_iImage		= cv::Mat::zeros( m_nRectHeight, r, CV_8UC4 );
+			m_nCurrent		= str;
+			m_nOffsetX		= m_nRectWidth;
+
+			if( 1 < m_iDisp.GetBPP() )
+			{
+				m_iFont.DrawTextBGRA( 0, 0, str.c_str(), m_nColor, m_iImage.data, m_iImage.step, m_iImage.cols, m_iImage.rows );
+			}
+			else
+			{
+				cv::Mat	gray	= cv::Mat::zeros( m_iImage.rows, m_iImage.cols, CV_8UC1 );
+
+				m_iFont.DrawTextGRAY( 0, 0, str.c_str(), 255, gray.data, gray.step, gray.cols, gray.rows );
+				
+				cv::threshold( gray, gray, 128, 255, CV_THRESH_BINARY );
+				cv::cvtColor( gray, m_iImage, CV_GRAY2BGRA );
+			}
+	
+			if( m_isRightAlign && (r < m_nRectWidth) )
+			{
+				Draw( m_iAreaImage, m_iAreaImage.cols-r, 0, m_iImage );
+			}
+			else
+			{
+				Draw( m_iAreaImage, 0, 0, m_iImage );
+			}
+
+			m_iDisp.WriteImageBGRA( m_nRectX, m_nRectY, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+		}
+		
+		if( m_nRectWidth < m_iImage.cols )
+		{
+			int		x	= m_nOffsetX;
+			
+			x	= 0 < x ? 0 : x;
+
+			m_nOffsetX -= (m_iDisp.GetSize().width + 239) / 240;
+			m_nOffsetX	= -m_iImage.cols <= m_nOffsetX ? m_nOffsetX : m_nRectWidth;
+
+			m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC4 );
+			Draw( m_iAreaImage, x, 0, m_iImage );
+			m_iDisp.WriteImageBGRA( m_nRectX, m_nRectY, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+		}
+	}
+	
+protected:
+	std::string	m_strText;
+	cv::Mat		m_iImage;
+	int			m_nOffsetX;
+	bool		m_isRightAlign;
+	ImageFont	m_iFont;
+	uint32_t	m_nColor;
+};
+
 
 
 class DrawArea_PlayPos: public DrawAreaIF
@@ -540,282 +541,619 @@ protected:
 
 
 
-void	SetupGuiLayout( std::vector<DrawAreaIF*>& iDrawAreas, DisplayIF* it )
+class MpdGui
 {
-	int		x, y, csz, big, med, sml;
-	int		cx	= it->GetSize().width;
-	int		cy	= it->GetSize().height;
-	
-	uint32_t	white	= 0xFFFFFFFF;
-	uint32_t	blue	= 0xFF0095D8;
-
-	if( cy <= cx )
+public:
+	MpdGui()
 	{
-		if( 64 < cy )
+		m_iDisplays		= GetUsrDisplays();
+		m_eDisplayMode	= DISPLAY_MODE_NONE;
+
+		m_isVolumeCtrlMode		= false;
+		m_isButtonNextPressed	= false;
+		m_isButtonPrevPressed	= false;
+	}
+	
+	bool	Initialize()
+	{
+		for( auto it : m_iDisplays )
 		{
-			int	m	= 2;
-			big	= 48 * cy / 240; 
-			med	= 36 * cy / 240; 
-			sml	= 28 * cy / 240;
+			if( 0 != it->Init() )
+			{
+				return	false;
+			}
 	
-			x	= m;
-			y	= m;
-			iDrawAreas.push_back( new DrawArea_STR( "Title",	blue,	*it,	x,	y,			cx - 2*x,	big	) );	y += big + 2;
-			iDrawAreas.push_back( new DrawArea_PlayPos(					*it,	x,	y,			cx - 2*x,	  4	) );	y +=   4 + 2;
-			iDrawAreas.push_back( new DrawArea_STR( "Artist",	white,	*it,	x,	y,			cx - 2*x,	med	) );	y += med + 2;
+			it->DispClear();
+			it->DispOn();
 	
-			x	= m * 2;
-			csz	= cy - y - m * 2;
-			iDrawAreas.push_back( new DrawArea_CoverImage(				*it,	x,	y,			csz,		csz	) );	x += csz + 8;
-			iDrawAreas.push_back( new DrawArea_STR( "Album",	white,	*it,	x,	y,			cx - x,		med	) );	y += med + 2;
-			iDrawAreas.push_back( new DrawArea_STR( "Date",		white,	*it,	x,	y,			cx - x,		med	) );	y += med + 2;
-			iDrawAreas.push_back( new DrawArea_STR( "audio",	white,	*it,	x,	cy-sml-m,	cx - x,		sml	) );
-	
-			iDrawAreas.push_back( new DrawArea_CpuTemp(					*it,	x,	y,			cx - x,		med ) );
+			SetupLayout_SongInfo( m_iDrawAreasSongInfo, it );
+			SetupLayout_Idle( m_iDrawAreasIdle, it );
+			SetupLayout_Volume( m_iDrawAreasVolume, it );
 		}
-		else if( 32 < cy )
+		
+		////////////////////////////////////
+		// Gpio interrupt
+		////////////////////////////////////
+		SetupButtons();
+		
+		return	true;
+	}
+
+	void	Loop()
+	{
+		m_iGpioIntCtrl.ThreadStart();
+	
+		////////////////////////////////////
+		// Connect to MPD
+		////////////////////////////////////
+		Socket			iSock;
+		std::string		str;
+		DISPLAY_MODE	ePrevDisplayMode;
+
+		ePrevDisplayMode	= DISPLAY_MODE_NONE;
+		m_eDisplayMode		= DISPLAY_MODE_NONE;
+		m_isVolumeCtrlMode	= false;
+
+		iSock.connect( MPD_HOST, MPD_PORT );
+		iSock	>> str;	// DummyRead
+	
+		while( 1 )
 		{
-			big	= 18 * cy / 64; 
-			sml	= 12 * cy / 64;
-			med	= (cy - big - sml - 2) / 2;
+			std::map<std::string,std::string>	iInfo;
 	
-			x	= 0;
-			y	= 0;
-			iDrawAreas.push_back( new DrawArea_STR( "Title",	white,	*it,	x,	y,			cx,		big ) );	y += big;
-			iDrawAreas.push_back( new DrawArea_PlayPos(					*it,	x,	y,			cx,		  1 ) );	y +=   1 + 1;
+			///////////////////////////////////////////
+			// Receive current playback info.
+			///////////////////////////////////////////
+			{
+				std::string	strCurrentSong;
+				std::string	strStatus;
+		
+				iSock		<< "currentsong\n";
+				iSock		>> strCurrentSong;
+				iSock		<< "status\n";
+				iSock		>> strStatus;
+				strStatus	+= strCurrentSong;
 	
-			csz	= it->GetSize().height - y;
-			iDrawAreas.push_back( new DrawArea_CoverImage(				*it,	x,	y,			csz,	csz  ));
+//				printf( "%s\n", strStatus.c_str() );
+	
+				std::string			line;
+				std::istringstream	stream(strStatus);
+				while( std::getline( stream, line ))
+				{
+					std::string::size_type	pos	= line.find( ":" );
+					if( pos != std::string::npos )
+					{
+						std::string	field( line, 0, pos );
+						std::string	value( line, pos+2 );
+						
+						iInfo[field]	= value;
+					}
+				}
+				
+				if( iInfo.find("Date") != iInfo.end() )
+				{
+					iInfo["Date"]	= iInfo["Date"].substr( 0, 4 );
+				}
+				
+				auto	itF	= iInfo.find("file");
+				if( itF != iInfo.end() )
+				{
+					if( iInfo.find("Title") == iInfo.end() )
+					{
+						std::vector<std::string>	names	= StringUtil::SplitReverse( (*itF).second, "/", 3 );
+	
+						iInfo["Title"]	= names[0];
+						iInfo["Album"]	= names[1];
+						iInfo["Artist"]	= names[2];
+					}
+					else if( 0 == (*itF).second.find("http://") )
+					{
+						std::vector<std::string>	names	= StringUtil::Split( iInfo["Title"], " - ", 3 );
+						
+						iInfo["Artist"]	= names[0];
+						iInfo["Title"]	= names[1];
+						iInfo["Album"]	= names[2];
+						
+						iInfo["Album"]	= iInfo["Name"];
+					}
+				}
+			}
 			
-			x	+= csz + 4;
+			if( iInfo["state"] == "play" )
+			{
+				m_eDisplayMode	= DISPLAY_MODE_SONGINFO;
+			}
+			else
+			{
+				m_eDisplayMode	= DISPLAY_MODE_IDLE;
+			}
+			
+			if( !m_isVolumeCtrlMode )
+			{
+				if( m_isButtonNextPressed )
+				{
+					double elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+										std::chrono::system_clock::now() -
+										m_iButtonNextPressedTime).count();
+
+					if( 0.3 <= elapsed )
+					{
+						m_isVolumeCtrlMode	= true;
+					}
+				}
+				
+				if( m_isButtonPrevPressed )
+				{
+					double elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+										std::chrono::system_clock::now() -
+										m_iButtonPrevPressedTime).count();
+
+					if( 0.3 <= elapsed )
+					{
+						m_isVolumeCtrlMode	= true;
+					}
+				}
+			}
+			
+			if( m_isVolumeCtrlMode )
+			{
+				m_eDisplayMode	= DISPLAY_MODE_VOLUME;
+
+#ifdef	VOLUME_CTRL_I2C_AK449x			
+				unsigned char	dataL[2]	= { 0x03, 0x00 };
+				unsigned char	dataR[2]	= { 0x04, 0x00 };
+				int				value		= 0;
+
+				{
+					ctrl_i2c		iic( "/dev/i2c-0",0x10 );
+					iic.write( dataL, 1 );
+					iic.read( &dataL[1], 1 );
+
+					value		= dataL[1];
+					if( m_isButtonNextPressed )
+					{
+						value++;
+						value	= 135 < value ? value <= 255 ? value : 255 : 135;
+					}
+					if( m_isButtonPrevPressed )
+					{
+						value--;
+						value	= 135 <= value ? value : 0;
+					}
 	
-			iDrawAreas.push_back( new DrawArea_STR( "Artist",	white,	*it,	x,	y,			cx - x,	med ) );	y += med;
-			iDrawAreas.push_back( new DrawArea_STR( "Album",	white,	*it,	x,	y,			cx - x,	med ) );	y += med;
-			iDrawAreas.push_back( new DrawArea_STR( "audio",	white,	*it,	x,	cy-sml,		cx - x,	sml ) );
+					dataL[1]	= value;
+					dataR[1]	= value;
+					
+					iic.write( dataL, 2 );
+					iic.write( dataR, 2 );
+				}
+
+				{
+					ctrl_i2c		iicR( "/dev/i2c-0",0x11 );
+					iicR.write( dataL, 2 );
+					iicR.write( dataR, 2 );
+				}
+
+				if( 0 < value )
+				{
+					float		db_value	= (value - 255) * 0.5f;
+					char		szBuf[64];
+					sprintf( szBuf, "%.1f dB", db_value );
+
+					iInfo["volume"]	= szBuf;
+				}		
+				else
+				{
+					iInfo["volume"]	= "- ∞ dB";
+				}
+#else
+				int		value		= std::stoi( iInfo["volume"] );
+				
+				if( 0 <= value )
+				{
+					if( m_isButtonNextPressed )
+					{
+						value++;
+						value	= value <= 100 ? value : 100;
+					}
+					if( m_isButtonPrevPressed )
+					{
+						value--;
+						value	= 0 <= value ? value : 0;
+					}
+					
+					{
+						char		szBuf[256];
+						std::string	str;
+
+						sprintf( szBuf, "setvol %d\n", value );
+
+						iSock	<< szBuf;
+						iSock	>> str;	// Dummy read
+
+						sprintf( szBuf, "%d", value );
+						iInfo["volume"]	= szBuf;
+					}
+				}
+				else
+				{
+					iInfo["volume"]	= "n/a";
+				}
+#endif
+			}
+
+			if( m_eDisplayMode != ePrevDisplayMode )
+			{
+				for( auto it : m_iDisplays )		
+				{
+					it->DispClear();
+				}
+				
+				for( auto it : m_iDrawAreasSongInfo )
+				{
+					it->Reset();
+				}
+	
+				for( auto it : m_iDrawAreasIdle )
+				{
+					it->Reset();
+				}
+	
+				for( auto it : m_iDrawAreasVolume )
+				{
+					it->Reset();
+				}
+
+				ePrevDisplayMode	= m_eDisplayMode;
+			}
+
+			switch( m_eDisplayMode )
+			{
+			case DISPLAY_MODE_SONGINFO:
+				for( auto it : m_iDrawAreasSongInfo )
+				{
+					it->UpdateInfo( iInfo );
+				}
+	
+				for( auto it : m_iDisplays )		
+				{
+					it->Flush();
+				}
+	
+				std::this_thread::sleep_for(std::chrono::milliseconds(20));
+				break;
+				
+			case DISPLAY_MODE_IDLE:
+				for( auto it : m_iDrawAreasIdle )
+				{
+					it->UpdateInfo( iInfo );
+				}
+	
+				for( auto it : m_iDisplays )		
+				{
+					it->Flush();
+				}
+	
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+				break;
+
+			case DISPLAY_MODE_VOLUME:
+				for( auto it : m_iDrawAreasVolume )
+				{
+					it->UpdateInfo( iInfo );
+				}
+	
+				for( auto it : m_iDisplays )		
+				{
+					it->Flush();
+				}
+	
+				std::this_thread::sleep_for(std::chrono::milliseconds(20));
+				break;
+			}
+		}
+	
+		m_iGpioIntCtrl.ThreadStop();
+		return;
+	}
+
+protected:
+	static	void	SetupLayout_SongInfo( std::vector<DrawAreaIF*>& iDrawAreas, DisplayIF* it )
+	{
+		int		x, y, csz, big, med, sml, ind;
+		int		cx	= it->GetSize().width;
+		int		cy	= it->GetSize().height;
+		
+		uint32_t	white	= 0xFFFFFFFF;
+		uint32_t	blue	= 0xFF0095D8;
+	
+		if( cy <= cx )
+		{
+			if( 64 < cy )
+			{
+				int	m	= 2;
+				big	= 48 * cy / 240; 
+				med	= 36 * cy / 240; 
+				sml	= 28 * cy / 240;
+				ind	=  4 * cy / 240;
+		
+				x	= m;
+				y	= m;
+				iDrawAreas.push_back( new DrawArea_STR( "Title",	blue,	*it,	x,	y,			cx - 2*x,	big	) );	y += big + 2;
+				iDrawAreas.push_back( new DrawArea_PlayPos(					*it,	x,	y,			cx - 2*x,	ind ) );	y += ind + 2;
+				iDrawAreas.push_back( new DrawArea_STR( "Artist",	white,	*it,	x,	y,			cx - 2*x,	med	) );	y += med + 2;
+		
+				x	= m * 2;
+				csz	= cy - y - m * 2;
+				iDrawAreas.push_back( new DrawArea_CoverImage(				*it,	x,	y,			csz,		csz	) );	x += csz + 8;
+				iDrawAreas.push_back( new DrawArea_STR( "Album",	white,	*it,	x,	y,			cx - x,		med	) );	y += med + 2;
+				iDrawAreas.push_back( new DrawArea_STR( "Date",		white,	*it,	x,	y,			cx - x,		med	) );	y += med + 2;
+				iDrawAreas.push_back( new DrawArea_STR( "audio",	white,	*it,	x,	cy-sml-m,	cx - x,		sml	) );
+		
+				iDrawAreas.push_back( new DrawArea_CpuTemp(					*it,	x,	y,			cx - x,		med ) );
+			}
+			else if( 32 < cy )
+			{
+				big	= 18 * cy / 64; 
+				sml	= 12 * cy / 64;
+				med	= (cy - big - sml - 2) / 2;
+		
+				x	= 0;
+				y	= 0;
+				iDrawAreas.push_back( new DrawArea_STR( "Title",	white,	*it,	x,	y,			cx,		big ) );	y += big;
+				iDrawAreas.push_back( new DrawArea_PlayPos(					*it,	x,	y,			cx,		  1 ) );	y +=   1 + 1;
+		
+				csz	= it->GetSize().height - y;
+				iDrawAreas.push_back( new DrawArea_CoverImage(				*it,	x,	y,			csz,	csz  ));
+				
+				x	+= csz + 4;
+		
+				iDrawAreas.push_back( new DrawArea_STR( "Artist",	white,	*it,	x,	y,			cx - x,	med ) );	y += med;
+				iDrawAreas.push_back( new DrawArea_STR( "Album",	white,	*it,	x,	y,			cx - x,	med ) );	y += med;
+				iDrawAreas.push_back( new DrawArea_STR( "audio",	white,	*it,	x,	cy-sml,		cx - x,	sml ) );
+			}
+			else
+			{
+				big	= 16 * cy / 32;
+				med	= cy - big - 2; 
+		
+				x	= 0;
+				y	= 0;
+				iDrawAreas.push_back( new DrawArea_STR( "Title",	white,	*it,	x,	y,			cx,		big ) );	y += big;
+				iDrawAreas.push_back( new DrawArea_PlayPos(					*it,	x,	y,			cx,		  1 ) );	y +=   1 + 1;
+				iDrawAreas.push_back( new DrawArea_STR( "Artist",	white,	*it,	x,	y,			cx,		med ) );	y += med;
+			}
 		}
 		else
 		{
-			big	= 16 * cy / 32;
-			med	= cy - big - 2; 
+			int	m	= 2;
+			big	= 36 * cy / 320; 
+			med	= 28 * cy / 320; 
+			sml	= 24 * cy / 320;
+			ind	=  4 * cy / 320;
 	
-			x	= 0;
-			y	= 0;
-			iDrawAreas.push_back( new DrawArea_STR( "Title",	white,	*it,	x,	y,			cx,		big ) );	y += big;
-			iDrawAreas.push_back( new DrawArea_PlayPos(					*it,	x,	y,			cx,		  1 ) );	y +=   1 + 1;
-			iDrawAreas.push_back( new DrawArea_STR( "Artist",	white,	*it,	x,	y,			cx,		med ) );	y += med;
+			x	= m;
+			y	= m;
+			iDrawAreas.push_back( new DrawArea_STR( "Title",	blue,	*it,	x,	y,			cx - 2*x,	big, false	) );	y += big + 2;
+			iDrawAreas.push_back( new DrawArea_PlayPos(					*it,	x,	y,			cx - 2*x,	ind			) );	y += ind + 2;
+			iDrawAreas.push_back( new DrawArea_STR( "Artist",	white,	*it,	x,	y,			cx - 2*x,	med, true	) );	y += med + 2;
+	
+			csz	= cy - y - 4 - med - 2 - sml;
+			csz	= csz < cx ? csz : cx;
+			
+			iDrawAreas.push_back( new DrawArea_CoverImage(				*it,	(cx-csz)/2,	y,	csz,		csz			));	y += csz + 4;
+			iDrawAreas.push_back( new DrawArea_STR( "Album",	white,	*it,	x,	y,			cx - 2*x,	med, false	) );	y += med + 2;
+			iDrawAreas.push_back( new DrawArea_STR( "audio",	white,	*it,	x,	cy-sml,		cx - 2*x,	sml, true	) );
 		}
 	}
-	else
+
+	static	void	SetupLayout_Volume( std::vector<DrawAreaIF*>& iDrawAreas, DisplayIF* it )
 	{
-		int	m	= 2;
-		big	= 36 * cy / 320; 
-		med	= 28 * cy / 320; 
-		sml	= 24 * cy / 320;
-
-		x	= m;
-		y	= m;
-		iDrawAreas.push_back( new DrawArea_STR( "Title",	blue,	*it,	x,	y,			cx - 2*x,	big, false	) );	y += big + 2;
-		iDrawAreas.push_back( new DrawArea_PlayPos(					*it,	x,	y,			cx - 2*x,	  4			) );	y +=   4 + 2;
-		iDrawAreas.push_back( new DrawArea_STR( "Artist",	white,	*it,	x,	y,			cx - 2*x,	med, true	) );	y += med + 2;
-
-		csz	= cy - y - 4 - med - 2 - sml;
-		csz	= csz < cx ? csz : cx;
+		int		m	= 4;
+		int		cx	= it->GetSize().width;
+		int		cy	= it->GetSize().height;
 		
-		iDrawAreas.push_back( new DrawArea_CoverImage(				*it,	(cx-csz)/2,	y,	csz,		csz			));	y += csz + 4;
-		iDrawAreas.push_back( new DrawArea_STR( "Album",	white,	*it,	x,	y,			cx - 2*x,	med, false	) );	y += med + 2;
-		iDrawAreas.push_back( new DrawArea_STR( "audio",	white,	*it,	x,	cy-sml,		cx - 2*x,	sml, true	) );
-	}
+		uint32_t	white	= 0xFFFFFFFF;
+
+#ifdef VOLUME_CTRL_I2C_AK449x
+		iDrawAreas.push_back( new DrawArea_StaticText(	"volume",	white,	*it,	m,	0,				cx - 2 * m, cy * 7 / 16 ) );
+		iDrawAreas.push_back( new DrawArea_STR( 		"volume",	white,	*it,	0,	cy * 7 / 16,	cx        , cy * 9 / 16, true ) );
+#else
+		iDrawAreas.push_back( new DrawArea_StaticText(	"volume",	white,	*it,	m,	0,				cx - 2 * m, cy *  6 / 16 ) );
+		iDrawAreas.push_back( new DrawArea_STR( 		"volume",	white,	*it,	0,	cy * 6 / 16,	cx - 2 * m, cy * 10 / 16, true ) );
+#endif
 }
 
-
-void	SetupIdleLayout( std::vector<DrawAreaIF*>& iDrawAreas, DisplayIF* it )
-{
-	int				font_height	= it->GetSize().height;
-	char			buf[256];
-	int				cx, cy;
-	int				x, y, top;
-
+	static	void	SetupLayout_Idle( std::vector<DrawAreaIF*>& iDrawAreas, DisplayIF* it )
 	{
-		ImageFont	iFont( FONT_DATE_PATH, font_height, false );
-		int			l,t,r,b;
-
-		iFont.CalcRect( l,t,r,b, "88:88" );
-		cx	= r-l;
-		cy	= b-t;
-
-		if( it->GetSize().width < cx )
-		{
-			cy			= it->GetSize().height * it->GetSize().width / cx;
-			cx			= it->GetSize().width;
-			cy			= cy * 7 / 8;
-			font_height	= cy;
-		}
-
-		printf("%d x %d, %d\n", cx, cy, font_height );
-	}	
+		int				font_height	= it->GetSize().height;
+		char			buf[256];
+		int				cx, cy;
+		int				x, y, top;
 	
-	// draw time
-	{
-		x	= (it->GetSize().width  - cx) / 2;
-		y	= (it->GetSize().height - cy) / 2;
-
-		iDrawAreas.push_back( new DrawArea_Time( *it,	x,	y,	cx,	cy ) );
-
-		top	= y;
-		y	+= cy;
+		{
+			ImageFont	iFont( FONT_DATE_PATH, font_height, false );
+			int			l,t,r,b;
+	
+			iFont.CalcRect( l,t,r,b, "88:88" );
+			cx	= r-l;
+			cy	= b-t;
+	
+			if( it->GetSize().width < cx )
+			{
+				cy			= it->GetSize().height * it->GetSize().width / cx;
+				cx			= it->GetSize().width;
+				cy			= cy * 7 / 8;
+				font_height	= cy;
+			}
+	
+	//		printf("%d x %d, %d\n", cx, cy, font_height );
+		}	
+		
+		// draw time
+		{
+			x	= (it->GetSize().width  - cx) / 2;
+			y	= (it->GetSize().height - cy) / 2;
+	
+			iDrawAreas.push_back( new DrawArea_Time( *it,	x,	y,	cx,	cy ) );
+	
+			top	= y;
+			y	+= cy;
+		}
+	
+		x	= 4;
+	
+		// draw date
+		cy	= font_height * 4 / 10;
+		cy	= cy < top ? cy : top;
+		iDrawAreas.push_back( new DrawArea_Date(	*it,	x,	top - cy,	it->GetSize().width - x,	cy ) );
+	
+		// cpu temp
+		cy	= font_height * 4 / 10;
+		cy	= y+cy < it->GetSize().height ? cy : it->GetSize().height - y;
+		iDrawAreas.push_back( new DrawArea_CpuTemp( *it,	0,	y,	it->GetSize().width - x,	cy,	true ) );
 	}
 
-	x	= 4;
+	void	SetupButtons()
+	{
+		m_iGpioIntCtrl.RegistPin(
+			GPIO_BUTTON_PREV,
+			[&]( int value )
+			{
+				if( 0 == value )
+				{
+					printf( "OnButtonPrev_Up()\n");
 
-	// draw date
-	cy	= font_height * 4 / 10;
-	cy	= cy < top ? cy : top;
-	iDrawAreas.push_back( new DrawArea_Date(	*it,	x,	top - cy,	it->GetSize().width - x,	cy ) );
+					if( m_isVolumeCtrlMode == 0 )
+					{
+						Socket		iSock;
+						std::string	str;
+		
+						iSock.connect( MPD_HOST, MPD_PORT );
+						iSock	<< "previous\n";
+						iSock	>> str;
+					}
 
-	// cpu temp
-	cy	= font_height * 4 / 10;
-	cy	= y+cy < it->GetSize().height ? cy : it->GetSize().height - y;
-	iDrawAreas.push_back( new DrawArea_CpuTemp( *it,	0,	y,	it->GetSize().width - x,	cy,	true ) );
-}
+					m_isButtonPrevPressed		= false;
+					m_isVolumeCtrlMode			= false;
+				}
+				else
+				{
+					printf( "OnButtonPrev_Down()\n");
+					m_isVolumeCtrlMode			= false;
+					m_iButtonPrevPressedTime	= std::chrono::system_clock::now();
+					m_isButtonPrevPressed		= true;
+				}
+			});
+	
+		m_iGpioIntCtrl.RegistPin(
+			GPIO_BUTTON_NEXT,
+			[&]( int value )
+			{
+				if( 0 == value )
+				{
+					printf( "OnButtonNext_Up()\n");
+
+					if( !m_isVolumeCtrlMode )
+					{
+						Socket		iSock;
+						std::string	str;
+		
+						iSock.connect( MPD_HOST, MPD_PORT );
+						iSock	<< "next\n";
+						iSock	>> str;
+					}
+
+					m_isButtonNextPressed		= false;
+					m_isVolumeCtrlMode			= false;
+				}
+				else
+				{
+					printf( "OnButtonNext_Down()\n");
+					m_isVolumeCtrlMode			= false;
+					m_iButtonNextPressedTime	= std::chrono::system_clock::now();
+					m_isButtonNextPressed		= true;
+				}
+			});
+	
+		m_iGpioIntCtrl.RegistPin(
+			GPIO_BUTTON_PLAY,
+			[]( int value )
+			{
+				if( 1 == value )
+				{
+					Socket		iSock;
+					std::string	str;
+		
+					iSock.connect( MPD_HOST, MPD_PORT );
+					
+					iSock	>> str;	// DummyRead
+					iSock	<< "status\n";
+					iSock	>> str;
+		
+					std::map<std::string,std::string>	iInfo;
+					std::string			line;
+					std::istringstream	stream(str);
+					while( std::getline( stream, line ))
+					{
+						std::string::size_type	pos	= line.find( ":" );
+						if( pos != std::string::npos )
+						{
+							std::string	field( line, 0, pos );
+							std::string	value( line, pos+2 );
+							
+							iInfo[field]	= value;
+						}
+					}
+					
+					if( iInfo["state"] == "play" )
+					{
+						iSock	<< "stop\n";
+					}
+					else
+					{
+						iSock	<< "play\n";
+					}
+	
+					iSock	>> str;	// dummy read
+				}
+			});
+	}
+	
+	enum DISPLAY_MODE
+	{
+		DISPLAY_MODE_NONE	= 0,
+		DISPLAY_MODE_IDLE,
+		DISPLAY_MODE_SONGINFO,
+		DISPLAY_MODE_VOLUME,
+	};
+
+protected:
+	DISPLAY_MODE				m_eDisplayMode;
+	std::vector<DisplayIF*>		m_iDisplays;
+	std::vector<DrawAreaIF*>	m_iDrawAreasSongInfo;
+	std::vector<DrawAreaIF*>	m_iDrawAreasIdle;
+	std::vector<DrawAreaIF*>	m_iDrawAreasVolume;
+	GpioInterruptCtrl			m_iGpioIntCtrl;
+
+	bool									m_isVolumeCtrlMode;
+	bool									m_isButtonNextPressed;
+	bool									m_isButtonPrevPressed;
+	std::chrono::system_clock::time_point	m_iButtonNextPressedTime;
+	std::chrono::system_clock::time_point	m_iButtonPrevPressedTime;
+};
+
 
 
 int	main()
 {
-	std::vector<DisplayIF*>		iDisplays	= GetUsrDisplays();
-	std::vector<DrawAreaIF*>	iDrawAreas;
-	std::vector<DrawAreaIF*>	iDrawAreasIdle;
-	GpioInterruptCtrl			iGpioIntCtrl;
+	MpdGui	iMPD;
 	
-	for( auto it : iDisplays )
+	if( !iMPD.Initialize() )
 	{
-		it->Init();
-		it->DispClear();
-		it->DispOn();
-
-		SetupGuiLayout( iDrawAreas, it );
-		SetupIdleLayout( iDrawAreasIdle, it );
-	}
-	
-	////////////////////////////////////
-	// Gpio interrupt
-	////////////////////////////////////
-	SetupButtons( iGpioIntCtrl );
-	
-	iGpioIntCtrl.ThreadStart();
-
-	////////////////////////////////////
-	// Connect to MPD
-	////////////////////////////////////
-	Socket		iSock;
-	std::string	str;
-	std::string	prevStatus;
-
-	iSock.connect( MPD_HOST, MPD_PORT );
-	iSock	>> str;	// DummyRead
-
-	while( 1 )
-	{
-		std::map<std::string,std::string>	iInfo;
-
-		///////////////////////////////////////////
-		// Receive current playback info.
-		///////////////////////////////////////////
-		{
-			std::string	strCurrentSong;
-			std::string	strStatus;
-	
-			iSock		<< "currentsong\n";
-			iSock		>> strCurrentSong;
-			iSock		<< "status\n";
-			iSock		>> strStatus;
-			strStatus	+= strCurrentSong;
-
-//			printf( "%s\n", strStatus.c_str() );
-
-			std::string			line;
-			std::istringstream	stream(strStatus);
-			while( std::getline( stream, line ))
-			{
-				std::string::size_type	pos	= line.find( ":" );
-				if( pos != std::string::npos )
-				{
-					std::string	field( line, 0, pos );
-					std::string	value( line, pos+2 );
-					
-					iInfo[field]	= value;
-				}
-			}
-			
-			if( iInfo.find("Date") != iInfo.end() )
-			{
-				iInfo["Date"]	= iInfo["Date"].substr( 0, 4 );
-			}
-			
-			auto	itF	= iInfo.find("file");
-			if( itF != iInfo.end() )
-			{
-				if( iInfo.find("Title") == iInfo.end() )
-				{
-					std::vector<std::string>	names	= StringUtil::SplitReverse( (*itF).second, "/", 3 );
-
-					iInfo["Title"]	= names[0];
-					iInfo["Album"]	= names[1];
-					iInfo["Artist"]	= names[2];
-				}
-				else if( 0 == (*itF).second.find("http://") )
-				{
-					std::vector<std::string>	names	= StringUtil::Split( iInfo["Title"], " - ", 3 );
-					
-					iInfo["Artist"]	= names[0];
-					iInfo["Title"]	= names[1];
-					iInfo["Album"]	= names[2];
-					
-					iInfo["Album"]	= iInfo["Name"];
-				}
-			}
-		}
-		
-		if( iInfo["state"] != prevStatus )
-		{
-			for( auto it : iDisplays )		
-			{
-				it->DispClear();
-			}
-			
-			for( auto it : iDrawAreas )
-			{
-				it->Reset();
-			}
-
-			for( auto it : iDrawAreasIdle )
-			{
-				it->Reset();
-			}
-
-			prevStatus	= iInfo["state"];
-		}
-
-		if( iInfo["state"] == "play" )
-		{
-			for( auto it : iDrawAreas )
-			{
-				it->UpdateInfo( iInfo );
-			}
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(20));
-		}
-		else
-		{
-			for( auto it : iDrawAreasIdle )
-			{
-				it->UpdateInfo( iInfo );
-			}
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
-		}
+		return	-1;
 	}
 
-	iGpioIntCtrl.ThreadStop();
+	iMPD.Loop();
 	return	0;
-	
 }
