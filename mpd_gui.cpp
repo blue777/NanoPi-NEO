@@ -17,36 +17,33 @@
 
 /*
 
-Required external packages:
+Required external packages and compile command:
 
-Ubuntu:
+Ubuntu + mpd:
+
 	apt install libcv-dev libopencv-dev opencv-doc fonts-takao-pgothic libtag1-dev
 
-Debian(Volumio):
+	g++ -O3 -pthread -std=c++11 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags opencv` `pkg-config --libs opencv` `freetype-config --cflags` `freetype-config --libs` `taglib-config --cflags` `taglib-config --libs`
+
+
+Volumio(Debian):
+
 	apt install libcv-dev libopencv-dev opencv-doc fonts-takao-gothic libtag1-dev
 
-HowToCompile:
-
-g++ -O3 -pthread -std=c++11 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags opencv` `pkg-config --libs opencv` `freetype-config --cflags` `freetype-config --libs` `taglib-config --cflags` `taglib-config --libs`
+	g++ -O3 -pthread -std=c++11 -DVOLUMIO=1 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags opencv` `pkg-config --libs opencv` `freetype-config --cflags` `freetype-config --libs` `taglib-config --cflags` `taglib-config --libs`
 
 */
 
 ///////////////////////////////
 //  Compile settings
 ///////////////////////////////
-#define	VOLUME_CTRL_I2C_AK449x	0
-#define	VOLUMIO					0
+
+//#define	VOLUME_CTRL_I2C_AK449x	1
 
 #define	GPIO_BUTTON_PREV		0
 #define	GPIO_BUTTON_NEXT		3
 #define	GPIO_BUTTON_PLAY		2
 
-
-#if VOLUMIO
-#define	MUSIC_ROOT_PATH		"/mnt/"
-#else
-#define	MUSIC_ROOT_PATH		"/media/"
-#endif
 
 
 
@@ -62,6 +59,23 @@ g++ -O3 -pthread -std=c++11 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags op
 #include "common/string_util.h"
 #include "CoverArtExtractor.h"
 #include "usr_displays.h"
+
+
+#ifndef VOLUME_CTRL_I2C_AK449x
+#define	VOLUME_CTRL_I2C_AK449x	0
+#endif
+
+#ifndef VOLUMIO
+#define	VOLUMIO					0
+#endif
+
+
+#if VOLUMIO
+#define	MUSIC_ROOT_PATH		"/mnt/"
+#else
+#define	MUSIC_ROOT_PATH		"/media/"
+#endif
+
 
 
 #define	FONT_PATH			"/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf"
