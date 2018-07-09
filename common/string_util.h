@@ -125,6 +125,7 @@ namespace StringUtil
 		return	std::string();
 	};
 
+#ifndef WIN32
 	std::string	GetTextFromExecResult( const char * pszCommand )
 	{
 		std::string	result;
@@ -144,6 +145,7 @@ namespace StringUtil
 
 		return	result;
 	};
+#endif
 	
 	
 };

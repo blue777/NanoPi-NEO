@@ -3,6 +3,13 @@
 
 
 #include <stdio.h>
+#include <vector>
+
+#ifdef WIN32
+#include <stdint.h>
+#include <WinSock2.h>
+#pragma comment( lib, "ws2_32.lib" )
+#else
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -11,13 +18,43 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#endif
 
 
 class Socket
 {
+protected:
+
+	class SocketInitializer
+	{
+	public:
+		SocketInitializer()
+		{
+#ifdef WIN32
+			int		retcode;
+			WSADATA	tWsaData;
+
+			retcode	=::WSAStartup( MAKEWORD(2,0), &tWsaData );
+			if( 0 != retcode )
+			{
+				throw;
+			}
+#endif
+		}
+
+		~SocketInitializer()
+		{
+#ifdef WIN32
+			::WSACleanup();
+#endif
+		}
+	};
+
 public:
 	Socket( int domain=AF_INET, int type=SOCK_STREAM, int protocol=0 )
 	{
+		static	SocketInitializer	iSockInitializer;
+
 		m_iSock	= ::socket( domain, type, protocol );
 		if( m_iSock < 0 )
 		{
@@ -30,7 +67,11 @@ public:
 	{
 		if( 0 <= m_iSock )
 		{
+#ifdef WIN32
+			::closesocket( m_iSock );
+#else
 			::close( m_iSock );
+#endif
 			m_iSock	= -1;
 		}
 	}
@@ -74,7 +115,7 @@ public:
 	
 	int	send( const uint8_t* pData, int nDataLength )
 	{
-		int	ret	= ::write( m_iSock, pData, nDataLength );
+		int	ret	= ::send( m_iSock, (const char*)pData, nDataLength, 0 );
 		if( ret <= 0 )
 		{
 			printf( "ERROR: Socket::send(*,%d) ret %d\n", nDataLength, ret );
@@ -85,7 +126,11 @@ public:
 	
 	int	recv( uint8_t* pData, int BufferSize )
 	{
+#ifdef WIN32
+		int	ret	= ::recv( m_iSock, (char*)pData, BufferSize, 0 );
+#else
 		int	ret	= ::read( m_iSock, pData, BufferSize );
+#endif
 		if( ret <= 0 )
 		{
 			printf( "ERROR: Socket::recv(*,%d) ret %d\n", BufferSize, ret );

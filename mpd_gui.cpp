@@ -19,13 +19,36 @@
 
 Required external packages:
 
-apt install libcv-dev libopencv-dev opencv-doc fonts-takao-pgothic libtag1-dev
+Ubuntu:
+	apt install libcv-dev libopencv-dev opencv-doc fonts-takao-pgothic libtag1-dev
+
+Debian(Volumio):
+	apt install libcv-dev libopencv-dev opencv-doc fonts-takao-gothic libtag1-dev
 
 HowToCompile:
 
 g++ -O3 -pthread -std=c++11 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags opencv` `pkg-config --libs opencv` `freetype-config --cflags` `freetype-config --libs` `taglib-config --cflags` `taglib-config --libs`
 
 */
+
+///////////////////////////////
+//  Compile settings
+///////////////////////////////
+#define	VOLUME_CTRL_I2C_AK449x	0
+#define	VOLUMIO					0
+
+#define	GPIO_BUTTON_PREV		0
+#define	GPIO_BUTTON_NEXT		3
+#define	GPIO_BUTTON_PLAY		2
+
+
+#if VOLUMIO
+#define	MUSIC_ROOT_PATH		"/mnt/"
+#else
+#define	MUSIC_ROOT_PATH		"/media/"
+#endif
+
+
 
 #include <map>
 #include <string>
@@ -35,25 +58,257 @@ g++ -O3 -pthread -std=c++11 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags op
 #include "common/perf_log.h"
 #include "common/img_font.h"
 #include "common/ctrl_socket.h"
+#include "common/ctrl_http.h"
 #include "common/string_util.h"
 #include "CoverArtExtractor.h"
 #include "usr_displays.h"
 
 
-#define	MUSIC_ROOT_PATH	"/media/"
+#define	FONT_PATH			"/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf"
+#define	FONT_DATE_PATH		"/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
 
-#define	FONT_PATH		"/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf"
-#define	FONT_DATE_PATH	"/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
+#define	MPD_HOST			"127.0.0.1"
+#define	MPD_PORT			6600
 
-#define	MPD_HOST		"127.0.0.1"
-#define	MPD_PORT		6600
+#define	VOLUMIO_HOST		"127.0.0.1"
+#define VOLUMIO_PORT		3000
 
-#define	GPIO_BUTTON_PREV	0
-#define	GPIO_BUTTON_NEXT	3
-#define	GPIO_BUTTON_PLAY	2
 
-//#define	VOLUME_CTRL_I2C_AK449x
 
+class MusicController
+{
+public:
+
+	static	std::map<std::string,std::string>	SplitMpdStatus( std::string &str )
+	{
+		std::map<std::string,std::string>	iInfo;
+		std::string			line;
+		std::istringstream	stream(str);
+		while( std::getline( stream, line ))
+		{
+			std::string::size_type	pos	= line.find( ":" );
+			if( pos != std::string::npos )
+			{
+				std::string	field( line, 0, pos );
+				std::string	value( line, pos+2 );
+				
+				iInfo[field]	= value;
+			}
+		}
+		
+		return	iInfo;
+	}
+
+	static	void	PlayPause()
+	{
+#if VOLUMIO
+		std::vector<uint8_t>	iData;
+
+		Http::Get( VOLUMIO_HOST, VOLUMIO_PORT, "/api/v1/getstate", iData );
+
+		std::string		str( (char*)iData.data(), iData.size() );
+
+		size_t			pos		= str.find( "\"status\":" );
+		int				value	= 0;
+
+		if( pos != std::string::npos )
+		{
+			pos		+= 9;
+			size_t	posE	= str.find( ',', pos );
+			
+			std::string	status( str.substr( pos, posE - pos ) );
+
+			if( std::string::npos != status.find( "play" ) )
+			{
+				Http::Get( VOLUMIO_HOST, VOLUMIO_PORT, "/api/v1/commands/?cmd=pause", iData );
+			}
+			else
+			{
+				Http::Get( VOLUMIO_HOST, VOLUMIO_PORT, "/api/v1/commands/?cmd=play", iData );
+			}
+		}
+#else
+		Socket		iSock;
+		std::string	str;
+
+		iSock.connect( MPD_HOST, MPD_PORT );
+		
+		iSock	>> str;	// DummyRead
+		iSock	<< "status\n";
+		iSock	>> str;
+
+		std::map<std::string,std::string>	iInfo	= SplitMpdStatus( str );
+
+		if( iInfo["state"] == "play" )
+		{
+			iSock	<< "pause\n";
+			iSock	>> str;	// dummy read
+		}
+		else
+		{
+			iSock	<< "play\n";
+			iSock	>> str;	// dummy read
+		}
+#endif
+	}
+
+	static	std::string	VolumeCtrl( int offset )
+	{
+#if VOLUME_CTRL_I2C_AK449x			
+		unsigned char	dataL[2]	= { 0x03, 0x00 };
+		unsigned char	dataR[2]	= { 0x04, 0x00 };
+		int				value		= 0;
+
+		{
+			ctrl_i2c		iic( "/dev/i2c-0",0x10 );
+			iic.write( dataL, 1 );
+			iic.read( &dataL[1], 1 );
+
+			value		= dataL[1];
+
+			if( 0 < offset )
+			{
+				value	+= offset;
+				value	= 135 < value ? value <= 255 ? value : 255 : 135;
+			}
+			else if( offset < 0 )
+			{
+				value	+= offset;
+				value	= 135 <= value ? value : 0;
+			}
+
+			dataL[1]	= value;
+			dataR[1]	= value;
+			
+			iic.write( dataL, 2 );
+			iic.write( dataR, 2 );
+		}
+
+		{
+			ctrl_i2c		iicR( "/dev/i2c-0",0x11 );
+			iicR.write( dataL, 2 );
+			iicR.write( dataR, 2 );
+		}
+
+		if( 0 < value )
+		{
+			float		db_value	= (value - 255) * 0.5f;
+			char		szBuf[64];
+			sprintf( szBuf, "%.1f dB", db_value );
+
+			return	szBuf;
+		}		
+		else
+		{
+			return	"- ∞ dB";
+		}
+#else
+		
+#if VOLUMIO
+		std::vector<uint8_t>	iData;
+
+		Http::Get( VOLUMIO_HOST, VOLUMIO_PORT, "/api/v1/getstate", iData );
+
+		std::string		str( (char*)iData.data(), iData.size() );
+
+		size_t			vol_pos	= str.rfind( ",\"volume\":" );
+		int				value	= 0;
+
+		if( vol_pos != std::string::npos )
+		{
+			char		szBuf[256];
+
+			vol_pos	+= 10;
+			value	= std::stoi( &str[vol_pos] );
+
+			value	+= offset;
+			value	= 0 <= value ? value <= 100 ? value : 100 : 0;
+
+			sprintf( szBuf, "%d", value );
+
+			str	= "/api/v1/commands/?cmd=volume&volume=";
+			str	+= szBuf;
+
+			Http::Get( VOLUMIO_HOST, VOLUMIO_PORT, str.c_str(), iData );
+			
+			return	szBuf;
+		}
+		else
+		{
+			return	"n/a";
+		}
+#else
+		Socket		iSock;
+		std::string	str;
+
+		iSock.connect( MPD_HOST, MPD_PORT );
+		
+		iSock	>> str;	// DummyRead
+		iSock	<< "status\n";
+		iSock	>> str;
+
+		std::map<std::string,std::string>	iInfo	= SplitMpdStatus( str );
+		int									value	= std::stoi( iInfo["volume"] );
+
+		if( 0 <= value )
+		{
+			value	+= offset;
+			value	= 0 <= value ? value <= 100 ? value : 100 : 0;
+
+			{
+				char		szBuf[256];
+				std::string	str;
+
+				sprintf( szBuf, "setvol %d\n", value );
+
+				iSock	<< szBuf;
+				iSock	>> str;	// Dummy read
+
+				sprintf( szBuf, "%d", value );
+				return	szBuf;
+			}
+		}
+		else
+		{
+			return	"n/a";
+		}
+#endif
+#endif
+	}
+
+
+	static	void	PlayNextSong()
+	{
+#if VOLUMIO
+		std::vector<uint8_t>	iData;
+
+		Http::Get( VOLUMIO_HOST, VOLUMIO_PORT, "/api/v1/commands/?cmd=next", iData );
+#else
+		Socket		iSock;
+		std::string	str;
+
+		iSock.connect( MPD_HOST, MPD_PORT );
+		iSock	<< "next\n";
+		iSock	>> str;
+#endif
+	}
+
+	static	void	PlayPrevSong()
+	{
+#if VOLUMIO
+		std::vector<uint8_t>	iData;
+
+		Http::Get( VOLUMIO_HOST, VOLUMIO_PORT, "/api/v1/commands/?cmd=prev", iData );
+#else
+		Socket		iSock;
+		std::string	str;
+
+		iSock.connect( MPD_HOST, MPD_PORT );
+		iSock	<< "previous\n";
+		iSock	>> str;
+#endif
+	}
+};
 
 
 
@@ -586,17 +841,12 @@ public:
 		////////////////////////////////////
 		// Connect to MPD
 		////////////////////////////////////
-		Socket			iSock;
-		std::string		str;
 		DISPLAY_MODE	ePrevDisplayMode;
 
 		ePrevDisplayMode	= DISPLAY_MODE_NONE;
 		m_eDisplayMode		= DISPLAY_MODE_NONE;
 		m_isVolumeCtrlMode	= false;
 
-		iSock.connect( MPD_HOST, MPD_PORT );
-		iSock	>> str;	// DummyRead
-	
 		while( 1 )
 		{
 			std::map<std::string,std::string>	iInfo;
@@ -605,31 +855,40 @@ public:
 			// Receive current playback info.
 			///////////////////////////////////////////
 			{
-				std::string	strCurrentSong;
 				std::string	strStatus;
 		
-				iSock		<< "currentsong\n";
-				iSock		>> strCurrentSong;
-				iSock		<< "status\n";
-				iSock		>> strStatus;
-				strStatus	+= strCurrentSong;
-	
-//				printf( "%s\n", strStatus.c_str() );
-	
-				std::string			line;
-				std::istringstream	stream(strStatus);
-				while( std::getline( stream, line ))
 				{
-					std::string::size_type	pos	= line.find( ":" );
-					if( pos != std::string::npos )
+					Socket		iSock;
+					std::string	strCurrentSong;
+
+					if( 0 == iSock.connect( MPD_HOST, MPD_PORT ) )
 					{
-						std::string	field( line, 0, pos );
-						std::string	value( line, pos+2 );
-						
-						iInfo[field]	= value;
+						try
+						{
+							iSock	>> strStatus;	// DummyRead
+
+							iSock	<< "currentsong\n";
+							iSock	>> strCurrentSong;
+							iSock	<< "status\n";
+							iSock	>> strStatus;
+						}
+						catch(...)
+						{
+						}
 					}
+
+					strStatus	+= strCurrentSong;
 				}
-				
+
+//				printf( "%s\n", strStatus.c_str() );
+
+				iInfo		= MusicController::SplitMpdStatus( strStatus );
+
+				if( iInfo.find("state") == iInfo.end() )
+				{
+					iInfo["state"]	= "???";
+				}
+
 				if( iInfo.find("Date") != iInfo.end() )
 				{
 					iInfo["Date"]	= iInfo["Date"].substr( 0, 4 );
@@ -658,7 +917,7 @@ public:
 					}
 				}
 			}
-			
+
 			if( iInfo["state"] == "play" )
 			{
 				m_eDisplayMode	= DISPLAY_MODE_SONGINFO;
@@ -667,7 +926,7 @@ public:
 			{
 				m_eDisplayMode	= DISPLAY_MODE_IDLE;
 			}
-			
+
 			if( !m_isVolumeCtrlMode )
 			{
 				if( m_isButtonNextPressed )
@@ -698,88 +957,10 @@ public:
 			if( m_isVolumeCtrlMode )
 			{
 				m_eDisplayMode	= DISPLAY_MODE_VOLUME;
-
-#ifdef	VOLUME_CTRL_I2C_AK449x			
-				unsigned char	dataL[2]	= { 0x03, 0x00 };
-				unsigned char	dataR[2]	= { 0x04, 0x00 };
-				int				value		= 0;
-
-				{
-					ctrl_i2c		iic( "/dev/i2c-0",0x10 );
-					iic.write( dataL, 1 );
-					iic.read( &dataL[1], 1 );
-
-					value		= dataL[1];
-					if( m_isButtonNextPressed )
-					{
-						value++;
-						value	= 135 < value ? value <= 255 ? value : 255 : 135;
-					}
-					if( m_isButtonPrevPressed )
-					{
-						value--;
-						value	= 135 <= value ? value : 0;
-					}
-	
-					dataL[1]	= value;
-					dataR[1]	= value;
-					
-					iic.write( dataL, 2 );
-					iic.write( dataR, 2 );
-				}
-
-				{
-					ctrl_i2c		iicR( "/dev/i2c-0",0x11 );
-					iicR.write( dataL, 2 );
-					iicR.write( dataR, 2 );
-				}
-
-				if( 0 < value )
-				{
-					float		db_value	= (value - 255) * 0.5f;
-					char		szBuf[64];
-					sprintf( szBuf, "%.1f dB", db_value );
-
-					iInfo["volume"]	= szBuf;
-				}		
-				else
-				{
-					iInfo["volume"]	= "- ∞ dB";
-				}
-#else
-				int		value		= std::stoi( iInfo["volume"] );
 				
-				if( 0 <= value )
-				{
-					if( m_isButtonNextPressed )
-					{
-						value++;
-						value	= value <= 100 ? value : 100;
-					}
-					if( m_isButtonPrevPressed )
-					{
-						value--;
-						value	= 0 <= value ? value : 0;
-					}
-					
-					{
-						char		szBuf[256];
-						std::string	str;
-
-						sprintf( szBuf, "setvol %d\n", value );
-
-						iSock	<< szBuf;
-						iSock	>> str;	// Dummy read
-
-						sprintf( szBuf, "%d", value );
-						iInfo["volume"]	= szBuf;
-					}
-				}
-				else
-				{
-					iInfo["volume"]	= "n/a";
-				}
-#endif
+				iInfo["volume"]	= MusicController::VolumeCtrl( 
+										(m_isButtonNextPressed ? 1 : 0) +
+										(m_isButtonPrevPressed ? -1 : 0) );
 			}
 
 			if( m_eDisplayMode != ePrevDisplayMode )
@@ -1026,12 +1207,7 @@ protected:
 
 					if( m_isVolumeCtrlMode == 0 )
 					{
-						Socket		iSock;
-						std::string	str;
-		
-						iSock.connect( MPD_HOST, MPD_PORT );
-						iSock	<< "previous\n";
-						iSock	>> str;
+						MusicController::PlayPrevSong();
 					}
 
 					m_isButtonPrevPressed		= false;
@@ -1056,12 +1232,7 @@ protected:
 
 					if( !m_isVolumeCtrlMode )
 					{
-						Socket		iSock;
-						std::string	str;
-		
-						iSock.connect( MPD_HOST, MPD_PORT );
-						iSock	<< "next\n";
-						iSock	>> str;
+						MusicController::PlayNextSong();
 					}
 
 					m_isButtonNextPressed		= false;
@@ -1082,40 +1253,7 @@ protected:
 			{
 				if( 1 == value )
 				{
-					Socket		iSock;
-					std::string	str;
-		
-					iSock.connect( MPD_HOST, MPD_PORT );
-					
-					iSock	>> str;	// DummyRead
-					iSock	<< "status\n";
-					iSock	>> str;
-		
-					std::map<std::string,std::string>	iInfo;
-					std::string			line;
-					std::istringstream	stream(str);
-					while( std::getline( stream, line ))
-					{
-						std::string::size_type	pos	= line.find( ":" );
-						if( pos != std::string::npos )
-						{
-							std::string	field( line, 0, pos );
-							std::string	value( line, pos+2 );
-							
-							iInfo[field]	= value;
-						}
-					}
-					
-					if( iInfo["state"] == "play" )
-					{
-						iSock	<< "stop\n";
-					}
-					else
-					{
-						iSock	<< "play\n";
-					}
-	
-					iSock	>> str;	// dummy read
+					MusicController::PlayPause();
 				}
 			});
 	}
