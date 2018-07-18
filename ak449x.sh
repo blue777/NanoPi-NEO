@@ -18,7 +18,7 @@ DF=0
 #   1 : Dual Stereo
 #   2 : Dual Monaural Unbalance (0x10:Lch, 0x11:Rch)
 #   3 : Dual Monaural Balance (0x10:Lch, 0x11:Rch, Lch:Positive, Rch:Negative)
-MODE=1
+MODE=0
 
 
 
