@@ -1,9 +1,9 @@
-/******************************************************************************
-	Copyright (C) 2017-2018 blue-7 (http://qiita.com/blue-7)
-******************************************************************************/
+#!/bin/sh
+#
+#	Copyright (C) 2017-2018 blue-7 (http://qiita.com/blue-7)
 
 # 255=0db, 254=-0.5dB,,, 231=-12dB
-VOLUME=255
+VOLUME=${VOLUME:=255}
 
 # Digital Filter
 #   0 : Sharp roll-off filter
@@ -11,14 +11,14 @@ VOLUME=255
 #   2 : Short delay sharp roll off filter (AK449x default)
 #   3 : Short delay slow roll off filter
 #   4 : Super Slow roll off filter (Non Over Sampling mode) 
-DF=0
+DF=${DF:=0}
 
 # Operation Mode
 #   0 : Single Stereo
 #   1 : Dual Stereo
 #   2 : Dual Monaural Unbalance (0x10:Lch, 0x11:Rch)
 #   3 : Dual Monaural Balance (0x10:Lch, 0x11:Rch, Lch:Positive, Rch:Negative)
-MODE=0
+MODE=${MODE:=0}
 
 
 
@@ -107,7 +107,6 @@ else
 	i2cset -y 0 0x10 0x05 $REG05
 fi
 
-
 if [ ${MODE} -gt 0 ]
 then
 	i2cset -y 0 0x10 0x03 ${VOLUME}
@@ -123,6 +122,9 @@ else
 fi
 
 
+
+echo ""
+echo "AK449x register dump"
 
 if [ ${MODE} -gt 0 ]
 then
