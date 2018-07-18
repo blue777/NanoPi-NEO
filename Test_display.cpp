@@ -34,21 +34,37 @@
 #include "common/perf_log.h"
 
 #include "common/display_st7735_spi.h"
+#include "common/display_st7789_spi.h"
 #include "common/display_ili9328_spi.h"
 #include "common/display_ili9341_spi.h"
 #include "common/display_ili9225_spi.h"
-#include "common/display_ssd1306_i2c.h"
-
+//#include "common/display_ssd1306_i2c.h"
+#include "common/display_ili9486_spi.h"
+#include "common/display_fbdev.h"
 
 void	CreateTestPattern( cv::Mat& image, int cx, int cy )
 {
-	int		blk_y	= cy / 6;
-	int		next_y	= cy - blk_y * 5;
+	int		blk_y	= cy / 7;
+	int		next_y	= cy - blk_y * 6;
 	int		y		= 0;
 
 	image	= cv::Mat::zeros( cy, cx, CV_8UC4 );
 
+	// Dot large
+	for( y = 0; y < next_y; y++ )
+	{
+		for( int x = 0; x < cx; x++ )
+		{
+			if( 1 & ((x/4) + (y/4)) )
+			{
+				image.at<cv::Vec4b>(y,x)	= cv::Vec4b(255,255,255,255);
+			}
+		}
+	}
+
 	// Dot
+	y		= next_y;
+	next_y	+= blk_y;
 	for( y = 0; y < next_y; y++ )
 	{
 		for( int x = 0; x < cx; x++ )
@@ -59,11 +75,23 @@ void	CreateTestPattern( cv::Mat& image, int cx, int cy )
 			}
 		}
 	}
-	
 
 	// Graygradation
 	y		= next_y;
-	next_y	+= blk_y * 2;
+	next_y	+= blk_y;
+	for( int x = 0; x < 8; x++ )
+	{
+		cv::rectangle(
+			image,
+			cv::Point2i( (x+0) * cx / 8, y ),
+			cv::Point2i( (x+1) * cx / 8, next_y),
+			cv::Scalar(x*36,x*36,x*36,x*36),	// B,G,R,A
+			CV_FILLED );
+	}
+
+	// Graygradation
+	y		= next_y;
+	next_y	+= blk_y;
 	for( int x = 0; x < 256; x++ )
 	{
 		cv::rectangle(
@@ -122,10 +150,15 @@ int main()
 //	display.push_back( new Display_SSD1306_i2c(180) );		// for SSD1306
 //	display.push_back( new Display_SSD1306_i2c(180,2) );	// for SH1106
 //	display.push_back( new Display_ILI9341_spi_TM24(0) );	// for Tianma2.4" Panel
-	display.push_back( new Display_ILI9341_spi_TM22(0) );	// for Tianma2.2" Panel
-//	display.push_back( new Display_ILI9328_spi_TM22(0) );	// for Tianma2.2" Panel
-//	display.push_back( new Display_ILI9225_spi(0) );		// for basic ILI9225
+//	display.push_back( new Display_ILI9341_spi_TM22(0,199) );	// for Tianma2.2" Panel
+//	display.push_back( new Display_ILI9328_spi_TM22(0,200) );	// for Tianma2.2" Panel
+//	display.push_back( new Display_ILI9225_spi(0,198) );		// for basic ILI9225
 //	display.push_back( new Display_ST7735_spi(180) );		// for KMR1.8
+//	display.push_back( new Display_ST7789_spi(0) );		// for KMR1.8
+//	display.push_back( new Display_WaveShare35_spi(90) );		// for WaveShare 3.5 inch LCD 320x480
+//	display.push_back( new Display_WaveShare40_spi(0) );		// for WaveShare 3.5 inch LCD 320x480
+//	display.push_back( new Display_fbdev("/dev/fb1"));
+	display.push_back( new Display_ILI9486_spi(0) );
 
 	////////////////////////////////////////////////////////////////
 	// DisplayIF::Init()
@@ -147,15 +180,6 @@ int main()
 		it->DispOn();
 	}
 
-	////////////////////////////////////////////////////////////////
-	// DisplayIF::DispOff()
-	////////////////////////////////////////////////////////////////
-	printf( "Hit any key to DisplayIF::DispClear()\n");
-	getchar();
-	for( auto it : display )
-	{
-		it->DispClear();
-	}
 
 	////////////////////////////////////////////////////////////////
 	// DisplayIF::WriteImageBGRA()
@@ -169,7 +193,120 @@ int main()
 		CreateTestPattern( img, it->GetSize().width, it->GetSize().height );
 
 		it->WriteImageBGRA( 0, 0, img.data, img.step, img.cols, img.rows );
+		it->Flush();
 	}
+
+	////////////////////////////////////////////////////////////////
+	// DisplayIF::DispOff()
+	////////////////////////////////////////////////////////////////
+	printf( "Hit any key to DisplayIF::DispClear()\n");
+	getchar();
+	for( auto it : display )
+	{
+		it->DispClear();
+	}
+
+	////////////////////////////////////////////////////////////////
+	// DisplayIF::WriteImageBGRA()
+	////////////////////////////////////////////////////////////////
+	printf( "Hit any key to DisplayIF::WriteImageBGRA() GRAY\n");
+	getchar();
+	for( auto it : display )
+	{
+		cv::Mat	img	= cv::Mat( it->GetSize().height, it->GetSize().width, CV_8UC4 );
+		
+		cv::rectangle(
+			img,
+			cv::Point2i( 0, 0 ),
+			cv::Point2i( it->GetSize().width, it->GetSize().height ),
+			cv::Scalar(128,128,128,128),	// B,G,R,A-->yellow??
+			CV_FILLED );
+
+		it->WriteImageBGRA( 0, 0, img.data, img.step, img.cols, img.rows );
+		it->Flush();
+	}
+
+	////////////////////////////////////////////////////////////////
+	// DisplayIF::WriteImageBGRA()
+	////////////////////////////////////////////////////////////////
+	printf( "Hit any key to DisplayIF::WriteImageBGRA() WHITE\n");
+	getchar();
+	for( auto it : display )
+	{
+		cv::Mat	img	= cv::Mat( it->GetSize().height, it->GetSize().width, CV_8UC4 );
+		
+		cv::rectangle(
+			img,
+			cv::Point2i( 0, 0 ),
+			cv::Point2i( it->GetSize().width, it->GetSize().height ),
+			cv::Scalar(255,255,255,255),
+			CV_FILLED );
+
+		it->WriteImageBGRA( 0, 0, img.data, img.step, img.cols, img.rows );
+		it->Flush();
+	}
+
+	////////////////////////////////////////////////////////////////
+	// DisplayIF::WriteImageBGRA()
+	////////////////////////////////////////////////////////////////
+	printf( "Hit any key to DisplayIF::WriteImageBGRA() RED\n");
+	getchar();
+	for( auto it : display )
+	{
+		cv::Mat	img	= cv::Mat( it->GetSize().height, it->GetSize().width, CV_8UC4 );
+		
+		cv::rectangle(
+			img,
+			cv::Point2i( 0, 0 ),
+			cv::Point2i( it->GetSize().width, it->GetSize().height ),
+			cv::Scalar(0,0,255,0),
+			CV_FILLED );
+
+		it->WriteImageBGRA( 0, 0, img.data, img.step, img.cols, img.rows );
+		it->Flush();
+	}
+
+	////////////////////////////////////////////////////////////////
+	// DisplayIF::WriteImageBGRA()
+	////////////////////////////////////////////////////////////////
+	printf( "Hit any key to DisplayIF::WriteImageBGRA() GREEN\n");
+	getchar();
+	for( auto it : display )
+	{
+		cv::Mat	img	= cv::Mat( it->GetSize().height, it->GetSize().width, CV_8UC4 );
+
+		cv::rectangle(
+			img,
+			cv::Point2i( 0, 0 ),
+			cv::Point2i( it->GetSize().width, it->GetSize().height ),
+			cv::Scalar(0,255,0,0),
+			CV_FILLED );
+
+		it->WriteImageBGRA( 0, 0, img.data, img.step, img.cols, img.rows );
+		it->Flush();
+	}
+
+	////////////////////////////////////////////////////////////////
+	// DisplayIF::WriteImageBGRA()
+	////////////////////////////////////////////////////////////////
+	printf( "Hit any key to DisplayIF::WriteImageBGRA() BLUE\n");
+	getchar();
+	for( auto it : display )
+	{
+		cv::Mat	img	= cv::Mat( it->GetSize().height, it->GetSize().width, CV_8UC4 );
+		
+		cv::rectangle(
+			img,
+			cv::Point2i( 0, 0 ),
+			cv::Point2i( it->GetSize().width, it->GetSize().height ),
+			cv::Scalar(255,0,0,0),
+			CV_FILLED );
+
+		it->WriteImageBGRA( 0, 0, img.data, img.step, img.cols, img.rows );
+		it->Flush();
+	}
+
+
 
 
 	////////////////////////////////////////////////////////////////
@@ -184,6 +321,7 @@ int main()
 		cv::resize( img, img, cv::Size(it->GetSize().width,it->GetSize().height), 0, 0, cv::INTER_AREA );
 		
 		it->WriteImageGRAY( 0, 0, img.data, img.step, img.cols, img.rows );
+		it->Flush();
 	}
 
 	////////////////////////////////////////////////////////////////
@@ -198,6 +336,7 @@ int main()
 		cv::resize( img, img, cv::Size(it->GetSize().width,it->GetSize().height), 0, 0, cv::INTER_AREA );
 
 		it->WriteImageBGRA( 0, 0, img.data, img.step, img.cols, img.rows );
+		it->Flush();
 	}
 
 	////////////////////////////////////////////////////////////////
@@ -236,6 +375,7 @@ int main()
 
 		it->DispClear();
 		it->WriteImageBGRA( (it->GetSize().width-img.cols)/2, (it->GetSize().height-img.rows)/2, img.data, img.step, img.cols, img.rows );
+		it->Flush();
 		it->DispOn();
 	}
 
@@ -268,6 +408,7 @@ int main()
 		for( int y = -img.rows; y < img.rows; y++ )
 		{
 			it->WriteImageGRAY( y, y, img.data, img.step, img.cols, img.rows );
+			it->Flush();
 		}
 	}
 
@@ -298,6 +439,7 @@ int main()
 		for( int y = -img.rows; y < img.rows; y++ )
 		{
 			it->WriteImageBGRA( y, y, img.data, img.step, img.cols, img.rows );
+			it->Flush();
 		}
 	}
 
@@ -316,6 +458,7 @@ int main()
 	{
 		it->Init();
 		it->DispClear();
+		it->Flush();
 		it->DispOn();
 	}
 
