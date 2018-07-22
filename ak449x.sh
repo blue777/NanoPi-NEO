@@ -74,7 +74,7 @@ REG05=`expr $((0x00)) + $SSLOW`
 
 if [ ${MODE} -eq 3 ]
 then
-	echo "MODE: DualMono Balance output mode"
+	echo "MODE: Dual Monaural - Balance output"
 	i2cset -y 0 0x10 0x01 $REG01
 	i2cset -y 0 0x11 0x01 $REG01
 	i2cset -y 0 0x10 0x02 `expr $((0x08)) + $REG02`
@@ -83,7 +83,7 @@ then
 	i2cset -y 0 0x11 0x05 `expr $((0x40)) + $REG05`
 elif [ ${MODE} -eq 2 ]
 then
-	echo "MODE: DualMono Unbalance output mode"
+	echo "MODE: Dual Monaural - Unbalance output"
 	i2cset -y 0 0x10 0x01 $REG01
 	i2cset -y 0 0x11 0x01 $REG01
 	i2cset -y 0 0x10 0x02 `expr $((0x08)) + $REG02`
@@ -92,7 +92,7 @@ then
 	i2cset -y 0 0x11 0x05 `expr $((0x00)) + $REG05`
 elif [ ${MODE} -eq 1 ]
 then
-	echo "MODE: Single Stereo x2 mode"
+	echo "MODE: Dual Stereo"
 	i2cset -y 0 0x10 0x01 $REG01
 	i2cset -y 0 0x10 0x02 $REG02
 	i2cset -y 0 0x10 0x05 $REG05
@@ -101,7 +101,7 @@ then
 	i2cset -y 0 0x11 0x02 $REG02
 	i2cset -y 0 0x11 0x05 $REG05
 else
-	echo "MODE: Single Stereo x1 mode"
+	echo "MODE: Single Stereo"
 	i2cset -y 0 0x10 0x01 $REG01
 	i2cset -y 0 0x10 0x02 $REG02
 	i2cset -y 0 0x10 0x05 $REG05
