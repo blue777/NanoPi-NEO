@@ -1,9 +1,9 @@
-#!/bin/sh
-#
-#	Copyright (C) 2017-2018 blue-7 (http://qiita.com/blue-7)
+/******************************************************************************
+	Copyright (C) 2017-2018 blue-7 (http://qiita.com/blue-7)
+******************************************************************************/
 
 # 255=0db, 254=-0.5dB,,, 231=-12dB
-VOLUME=${VOLUME:=255}
+VOLUME=255
 
 # Digital Filter
 #   0 : Sharp roll-off filter
@@ -11,14 +11,14 @@ VOLUME=${VOLUME:=255}
 #   2 : Short delay sharp roll off filter (AK449x default)
 #   3 : Short delay slow roll off filter
 #   4 : Super Slow roll off filter (Non Over Sampling mode) 
-DF=${DF:=0}
+DF=0
 
 # Operation Mode
 #   0 : Single Stereo
 #   1 : Dual Stereo
 #   2 : Dual Monaural Unbalance (0x10:Lch, 0x11:Rch)
 #   3 : Dual Monaural Balance (0x10:Lch, 0x11:Rch, Lch:Positive, Rch:Negative)
-MODE=${MODE:=0}
+MODE=1
 
 
 
@@ -74,7 +74,7 @@ REG05=`expr $((0x00)) + $SSLOW`
 
 if [ ${MODE} -eq 3 ]
 then
-	echo "MODE: Dual Monaural - Balance output"
+	echo "MODE: DualMono Balance output mode"
 	i2cset -y 0 0x10 0x01 $REG01
 	i2cset -y 0 0x11 0x01 $REG01
 	i2cset -y 0 0x10 0x02 `expr $((0x08)) + $REG02`
@@ -83,7 +83,7 @@ then
 	i2cset -y 0 0x11 0x05 `expr $((0x40)) + $REG05`
 elif [ ${MODE} -eq 2 ]
 then
-	echo "MODE: Dual Monaural - Unbalance output"
+	echo "MODE: DualMono Unbalance output mode"
 	i2cset -y 0 0x10 0x01 $REG01
 	i2cset -y 0 0x11 0x01 $REG01
 	i2cset -y 0 0x10 0x02 `expr $((0x08)) + $REG02`
@@ -92,7 +92,7 @@ then
 	i2cset -y 0 0x11 0x05 `expr $((0x00)) + $REG05`
 elif [ ${MODE} -eq 1 ]
 then
-	echo "MODE: Dual Stereo"
+	echo "MODE: Single Stereo x2 mode"
 	i2cset -y 0 0x10 0x01 $REG01
 	i2cset -y 0 0x10 0x02 $REG02
 	i2cset -y 0 0x10 0x05 $REG05
@@ -101,11 +101,12 @@ then
 	i2cset -y 0 0x11 0x02 $REG02
 	i2cset -y 0 0x11 0x05 $REG05
 else
-	echo "MODE: Single Stereo"
+	echo "MODE: Single Stereo x1 mode"
 	i2cset -y 0 0x10 0x01 $REG01
 	i2cset -y 0 0x10 0x02 $REG02
 	i2cset -y 0 0x10 0x05 $REG05
 fi
+
 
 if [ ${MODE} -gt 0 ]
 then
@@ -122,9 +123,6 @@ else
 fi
 
 
-
-echo ""
-echo "AK449x register dump"
 
 if [ ${MODE} -gt 0 ]
 then
