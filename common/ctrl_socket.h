@@ -76,6 +76,59 @@ public:
 		}
 	}
 	
+	
+	static	std::string	GetMyIpAddrString()
+	{
+		std::string		strMyIP	= "127.0.0.1";
+		
+		int		sock	= ::socket( AF_INET, SOCK_DGRAM, 0 ); 
+		if( sock < 0 )
+		{
+			return	strMyIP;
+		}
+
+		struct sockaddr_in	tHost	= {0};
+		tHost.sin_family		= AF_INET;
+		tHost.sin_port			= htons( 80 );
+		tHost.sin_addr.s_addr	= inet_addr("10.255.255.255");
+		
+		if( 0 != ::connect( sock, (struct sockaddr*)&tHost, sizeof(tHost) ) )
+		{
+#ifdef WIN32
+			::closesocket( sock );
+#else
+			::close( sock );
+#endif
+			return	strMyIP;
+		}
+
+		struct sockaddr_in	tMyIP		= {0};
+		socklen_t			tMyIpLen	= sizeof(tMyIP);
+		if( 0 == ::getsockname( sock, (struct sockaddr*)&tMyIP, &tMyIpLen ) )
+		{
+			char			szBuf[64];
+			unsigned char*	MyAddr	= (unsigned char*)&tMyIP.sin_addr.s_addr;
+			
+			sprintf(
+				szBuf,
+				"%d.%d.%d.%d",
+				MyAddr[0],
+				MyAddr[1],
+				MyAddr[2],
+				MyAddr[3] );
+
+			strMyIP	= szBuf;
+		}
+
+#ifdef WIN32
+		::closesocket( sock );
+#else
+		::close( sock );
+#endif
+
+		return	strMyIP;
+	}
+	
 	int	connect( const char* pszHostName, int port )
 	{
 		struct sockaddr_in	tHost	= {0};

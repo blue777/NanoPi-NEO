@@ -57,6 +57,7 @@ Volumio(Debian):
 #include "common/ctrl_socket.h"
 #include "common/ctrl_http.h"
 #include "common/string_util.h"
+#include "common/ctrl_socket.h"
 #include "CoverArtExtractor.h"
 #include "usr_displays.h"
 
@@ -1242,10 +1243,14 @@ protected:
 		cy	= cy < top ? cy : top;
 		iDrawAreas.push_back( new DrawArea_Date(	*it,	x,	top - cy,	it->GetSize().width - x,	cy ) );
 	
-		// cpu temp
 		cy	= font_height * 4 / 10;
 		cy	= y+cy < it->GetSize().height ? cy : it->GetSize().height - y;
-		iDrawAreas.push_back( new DrawArea_CpuTemp( *it,	0,	y,	it->GetSize().width - x,	cy,	true ) );
+
+		// ip addr
+		iDrawAreas.push_back( new DrawArea_StaticText( Socket::GetMyIpAddrString(),	0xFFFFFFFF,	*it,	0,	y,	it->GetSize().width - x,	cy,	true ) );	y	+= cy;
+
+		// cpu temp
+		iDrawAreas.push_back( new DrawArea_CpuTemp( *it,	0,	y,	it->GetSize().width - x,	cy,	true ) );	y	+= cy;
 	}
 
 	void	SetupButtons()
