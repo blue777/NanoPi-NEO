@@ -6,11 +6,13 @@
 class Http
 {
 public:
-	static	int		Get( const char * pszHostName, int port, const char * URI, std::vector<uint8_t>& iRecv, std::vector<std::string>* piHeader=NULL )
+	static	int		Get( const char * pszHostName, int port, const char * URI, std::vector<uint8_t>& iRecv, std::vector<std::string>* piHeader=NULL, int timeout=1000 )
 	{
 		Socket		iSock;
 		std::string	str;
 		int			ret;
+		
+		iSock.SetTimeout( timeout );
 
 		ret		= iSock.connect( pszHostName, port );
 		if( 0 != ret )

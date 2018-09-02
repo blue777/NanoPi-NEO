@@ -160,6 +160,31 @@ public:
 
 		str	= std::string( (const char*)buf.data(), ret );
     }
+	
+	int		SetTimeout( int timeout=1000 )
+	{
+#ifdef WIN32
+		setsockopt( m_iSock, SOL_TCP, TCP_USER_TIMEOUT, (char*)&timeout, sizeof(timeout) );
+#else
+		struct timeval	to;
+		to.tv_sec	= timeout / 1000;
+		to.tv_usec	= (timeout % 1000) * 1000;
+
+		if( setsockopt( m_iSock, SOL_SOCKET, SO_RCVTIMEO, (char *)&to, sizeof(to)) < 0 )
+		{
+			printf("[ERROR] setsockopt(RCV_TIMEO).\r\n");
+			return	-1;
+		}
+
+		if( setsockopt( m_iSock, SOL_SOCKET, SO_SNDTIMEO, (char *)&to, sizeof(to)) < 0 )
+		{
+			printf("[ERROR] setsockopt(SND_TIMEO).\r\n");
+			return	-1;
+		}
+#endif
+
+		return	0;
+	}
 
 protected:
 	int		m_iSock;
