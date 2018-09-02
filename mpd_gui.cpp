@@ -214,7 +214,7 @@ public:
 		}		
 		else
 		{
-			return	"- ∞ dB";
+			return	"- ∁EdB";
 		}
 #else
 		
@@ -230,22 +230,30 @@ public:
 
 		if( vol_pos != std::string::npos )
 		{
-			char		szBuf[256];
+			try
+			{
+				char		szBuf[256];
 
-			vol_pos	+= 10;
-			value	= std::stoi( &str[vol_pos] );
+				vol_pos	+= 10;
+				value	= std::stoi( &str[vol_pos] );
 
-			value	+= offset;
-			value	= 0 <= value ? value <= 100 ? value : 100 : 0;
+				value	+= offset;
+				value	= 0 <= value ? value <= 100 ? value : 100 : 0;
 
-			sprintf( szBuf, "%d", value );
+				sprintf( szBuf, "%d", value );
 
-			str	= "/api/v1/commands/?cmd=volume&volume=";
-			str	+= szBuf;
+				str	= "/api/v1/commands/?cmd=volume&volume=";
+				str	+= szBuf;
 
-			Http::Get( VOLUMIO_HOST, VOLUMIO_PORT, str.c_str(), iData );
+				Http::Get( VOLUMIO_HOST, VOLUMIO_PORT, str.c_str(), iData );
+				
+				return	szBuf;
+			}
+			catch( std::exception &e )
+			{
+			}
 			
-			return	szBuf;
+			return	"n/a";
 		}
 		else
 		{
@@ -1062,7 +1070,7 @@ protected:
 		uint32_t	white	= 0xFFFFFFFF;
 		uint32_t	blue	= 0xFF0095D8;
 	
-		if( cy <= cx )
+		if( cy < cx )
 		{
 			if( 64 < cy )
 			{
@@ -1119,6 +1127,29 @@ protected:
 				iDrawAreas.push_back( new DrawArea_STR( "Artist",	white,	*it,	x,	y,			cx,		med ) );	y += med;
 			}
 		}
+		else if( cx == cy )
+		{
+			int	m	= 2;
+			big	= 36 * cy / 240; // 48
+			med	= 32 * cy / 240; // 36
+			sml	= 20 * cy / 240;
+			ind	=  6 * cy / 240;
+	
+			x	= m;
+			y	= m;
+			iDrawAreas.push_back( new DrawArea_STR( "Title",	blue,	*it,	x,	y,			cx - 2*x,	big,	false	) );	y += big + 2;
+			iDrawAreas.push_back( new DrawArea_PlayPos(					*it,	x,	y,			cx - 2*x,	ind				) );	y += ind + 2;
+			iDrawAreas.push_back( new DrawArea_STR( "Album",	white,	*it,	x,	y,			cx - 2*x,	med,	false	) );	y += med + 2;
+			iDrawAreas.push_back( new DrawArea_STR( "Artist",	white,	*it,	x,	y,			cx - 2*x,	med,	false	) );	y += med + 2;
+	
+			x	= m * 2;
+			csz	= cy - y - m * 2;
+			iDrawAreas.push_back( new DrawArea_CoverImage(				*it,	x,	y,			csz,		csz	) );	x += csz + 8;
+
+			iDrawAreas.push_back( new DrawArea_STR( "Date",		white,	*it,	x,	y,				cx - x,		med	) );	y += med + 2;
+			iDrawAreas.push_back( new DrawArea_CpuTemp(					*it,	x,	cy-sml*2-m*2,	cx - x,		sml ) );	y += med + 2;
+			iDrawAreas.push_back( new DrawArea_STR( "audio",	white,	*it,	x,	cy-sml-m,		cx - x,		sml	) );
+		}
 		else
 		{
 			int	m	= 2;
@@ -1149,15 +1180,23 @@ protected:
 		int		cy	= it->GetSize().height;
 		
 		uint32_t	white	= 0xFFFFFFFF;
+		int		oy	= 0;
+		
+		if( cx <= cy )
+		{
+			int	h	= cx * 2 / 3;
+			oy	= (cy - h) / 2;
+			cy	= h;
+		}
 
 #ifdef VOLUME_CTRL_I2C_AK449x
-		iDrawAreas.push_back( new DrawArea_StaticText(	"volume",	white,	*it,	m,	0,				cx - 2 * m, cy * 7 / 16 ) );
-		iDrawAreas.push_back( new DrawArea_STR( 		"volume",	white,	*it,	0,	cy * 7 / 16,	cx        , cy * 9 / 16, true ) );
+		iDrawAreas.push_back( new DrawArea_StaticText(	"volume",	white,	*it,	m,	oy,					cx - 2 * m, cy * 6 / 16 ) );
+		iDrawAreas.push_back( new DrawArea_STR( 		"volume",	white,	*it,	0,	oy + cy * 6 / 16,	cx        , cy * 6 / 16, true ) );
 #else
-		iDrawAreas.push_back( new DrawArea_StaticText(	"volume",	white,	*it,	m,	0,				cx - 2 * m, cy *  6 / 16 ) );
-		iDrawAreas.push_back( new DrawArea_STR( 		"volume",	white,	*it,	0,	cy * 6 / 16,	cx - 2 * m, cy * 10 / 16, true ) );
+		iDrawAreas.push_back( new DrawArea_StaticText(	"volume",	white,	*it,	m,	oy,					cx - 2 * m, cy *  6 / 16 ) );
+		iDrawAreas.push_back( new DrawArea_STR( 		"volume",	white,	*it,	0,	oy + cy * 6 / 16,	cx - 2 * m, cy * 10 / 16, true ) );
 #endif
-}
+	}
 
 	static	void	SetupLayout_Idle( std::vector<DrawAreaIF*>& iDrawAreas, DisplayIF* it )
 	{
@@ -1226,6 +1265,7 @@ protected:
 
 					m_isButtonPrevPressed		= false;
 					m_isVolumeCtrlMode			= false;
+					printf( "OnButtonPrev_Up() Leave\n");
 				}
 				else
 				{
@@ -1233,6 +1273,7 @@ protected:
 					m_isVolumeCtrlMode			= false;
 					m_iButtonPrevPressedTime	= std::chrono::system_clock::now();
 					m_isButtonPrevPressed		= true;
+					printf( "OnButtonPrev_Down() Leave\n");
 				}
 			});
 	
@@ -1251,6 +1292,8 @@ protected:
 
 					m_isButtonNextPressed		= false;
 					m_isVolumeCtrlMode			= false;
+
+					printf( "OnButtonNext_Up() LEAVE\n");
 				}
 				else
 				{
@@ -1258,6 +1301,7 @@ protected:
 					m_isVolumeCtrlMode			= false;
 					m_iButtonNextPressedTime	= std::chrono::system_clock::now();
 					m_isButtonNextPressed		= true;
+					printf( "OnButtonNext_Down() LEAVE\n");
 				}
 			});
 	
