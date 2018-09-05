@@ -572,6 +572,103 @@ protected:
 
 
 
+class DrawArea_MyIpAddr : public DrawAreaIF
+{
+public:
+	DrawArea_MyIpAddr( uint32_t color, DisplayIF& iDisplay, int x, int y, int cx, int cy, bool isRightAlign=false ) :
+		DrawAreaIF( iDisplay, x, y, cx, cy ),
+		m_iFont( FONT_PATH, m_nRectHeight )
+	{
+		m_nColor		= color;
+		m_isRightAlign	= isRightAlign;
+		
+		m_iLastChecked	= std::chrono::high_resolution_clock::now();
+		m_strText		= Socket::GetMyIpAddrString();
+	}
+
+	virtual	void	UpdateInfo( std::map<std::string,std::string>& map )
+	{
+		
+		std::chrono::high_resolution_clock::time_point   current	= std::chrono::high_resolution_clock::now();
+        double	elapsed = std::chrono::duration_cast<std::chrono::seconds>(current-m_iLastChecked).count();
+ 		uint32_t	nColor	= m_nColor;
+
+        if( 10 <= elapsed )
+        {
+        	m_iLastChecked	= current;
+ 			m_strText		= Socket::GetMyIpAddrString();
+ 			
+ 			if( m_strText == "127.0.0.1" )
+ 			{
+ 				nColor	= 0xFFFF8080;
+ 			}
+ 		}
+ 		
+		if( m_nCurrent != m_strText )
+		{
+			m_nCurrent	= m_strText;
+
+			int	l,t,r,b;
+			m_iFont.CalcRect( l,t,r,b, m_strText.c_str() );
+
+			m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC4 );
+			m_iImage		= cv::Mat::zeros( m_nRectHeight, r, CV_8UC4 );
+			m_nCurrent		= m_strText;
+			m_nOffsetX		= m_nRectWidth;
+
+			if( 1 < m_iDisp.GetBPP() )
+			{
+				m_iFont.DrawTextBGRA( 0, 0, m_nCurrent.c_str(), nColor, m_iImage.data, m_iImage.step, m_iImage.cols, m_iImage.rows );
+			}
+			else
+			{
+				cv::Mat	gray	= cv::Mat::zeros( m_iImage.rows, m_iImage.cols, CV_8UC1 );
+
+				m_iFont.DrawTextGRAY( 0, 0, m_nCurrent.c_str(), 255, gray.data, gray.step, gray.cols, gray.rows );
+				
+				cv::threshold( gray, gray, 128, 255, CV_THRESH_BINARY );
+				cv::cvtColor( gray, m_iImage, CV_GRAY2BGRA );
+			}
+	
+			if( m_isRightAlign && (r < m_nRectWidth) )
+			{
+				Draw( m_iAreaImage, m_iAreaImage.cols-r, 0, m_iImage );
+			}
+			else
+			{
+				Draw( m_iAreaImage, 0, 0, m_iImage );
+			}
+
+			m_iDisp.WriteImageBGRA( m_nRectX, m_nRectY, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+		}
+		
+		if( m_nRectWidth < m_iImage.cols )
+		{
+			int		x	= m_nOffsetX;
+			
+			x	= 0 < x ? 0 : x;
+
+			m_nOffsetX -= (m_iDisp.GetSize().width + 239) / 240;
+			m_nOffsetX	= -m_iImage.cols <= m_nOffsetX ? m_nOffsetX : m_nRectWidth;
+
+			m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC4 );
+			Draw( m_iAreaImage, x, 0, m_iImage );
+			m_iDisp.WriteImageBGRA( m_nRectX, m_nRectY, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+		}
+	}
+	
+protected:
+   	std::chrono::high_resolution_clock::time_point	m_iLastChecked;
+   	std::string										m_strText;
+	cv::Mat		m_iImage;
+	int			m_nOffsetX;
+	bool		m_isRightAlign;
+	ImageFont	m_iFont;
+	uint32_t	m_nColor;
+};
+
+
+
 class DrawArea_PlayPos: public DrawAreaIF
 {
 public:
@@ -1247,7 +1344,7 @@ protected:
 		cy	= y+cy < it->GetSize().height ? cy : it->GetSize().height - y;
 
 		// ip addr
-		iDrawAreas.push_back( new DrawArea_StaticText( Socket::GetMyIpAddrString(),	0xFFFFFFFF,	*it,	0,	y,	it->GetSize().width - x,	cy,	true ) );	y	+= cy;
+		iDrawAreas.push_back( new DrawArea_MyIpAddr(	0xFFFFFFFF,	*it,	0,	y,	it->GetSize().width - x,	cy,	true ) );	y	+= cy;
 
 		// cpu temp
 		iDrawAreas.push_back( new DrawArea_CpuTemp( *it,	0,	y,	it->GetSize().width - x,	cy,	true ) );	y	+= cy;
