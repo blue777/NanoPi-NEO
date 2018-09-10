@@ -591,7 +591,6 @@ public:
 		
 		std::chrono::high_resolution_clock::time_point   current	= std::chrono::high_resolution_clock::now();
         double	elapsed = std::chrono::duration_cast<std::chrono::seconds>(current-m_iLastChecked).count();
- 		uint32_t	nColor	= m_nColor;
 
         if( 10 <= elapsed )
         {
@@ -600,7 +599,11 @@ public:
  			
  			if( m_strText == "127.0.0.1" )
  			{
- 				nColor	= 0xFFFF8080;
+ 				m_nColor	= 0xFFFF8080;
+ 			}
+ 			else
+ 			{
+ 				m_nColor	= 0xFFFFFFFF;
  			}
  		}
  		
@@ -618,7 +621,7 @@ public:
 
 			if( 1 < m_iDisp.GetBPP() )
 			{
-				m_iFont.DrawTextBGRA( 0, 0, m_nCurrent.c_str(), nColor, m_iImage.data, m_iImage.step, m_iImage.cols, m_iImage.rows );
+				m_iFont.DrawTextBGRA( 0, 0, m_nCurrent.c_str(), m_nColor, m_iImage.data, m_iImage.step, m_iImage.cols, m_iImage.rows );
 			}
 			else
 			{
