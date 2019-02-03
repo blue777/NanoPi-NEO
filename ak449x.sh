@@ -1,9 +1,9 @@
-/******************************************************************************
-	Copyright (C) 2017-2018 blue-7 (http://qiita.com/blue-7)
-******************************************************************************/
+#!/bin/sh
+#
+#	Copyright (C) 2017-2018 blue-7 (http://qiita.com/blue-7)
 
 # 255=0db, 254=-0.5dB,,, 231=-12dB
-VOLUME=255
+VOLUME=${VOLUME:=255}
 
 # Digital Filter
 #   0 : Sharp roll-off filter
@@ -11,20 +11,27 @@ VOLUME=255
 #   2 : Short delay sharp roll off filter (AK449x default)
 #   3 : Short delay slow roll off filter
 #   4 : Super Slow roll off filter (Non Over Sampling mode) 
-DF=0
+DF=${DF:=0}
 
 # Operation Mode
 #   0 : Single Stereo
 #   1 : Dual Stereo
 #   2 : Dual Monaural Unbalance (0x10:Lch, 0x11:Rch)
 #   3 : Dual Monaural Balance (0x10:Lch, 0x11:Rch, Lch:Positive, Rch:Negative)
-MODE=1
-
-
-
+MODE=${MODE:=0}
 
 
 PDN="199"
+MUTE="200"
+
+
+if [ ! -e /sys/class/gpio/gpio${MUTE}/direction ]; then
+        echo ${MUTE} > /sys/class/gpio/export
+fi
+
+echo out > /sys/class/gpio/gpio${MUTE}/direction
+echo 0 > /sys/class/gpio/gpio${MUTE}/value
+
 
 if [ ! -e /sys/class/gpio/gpio${PDN}/direction ]; then
 	echo ${PDN} > /sys/class/gpio/export
@@ -34,6 +41,8 @@ echo out > /sys/class/gpio/gpio${PDN}/direction
 echo 0 > /sys/class/gpio/gpio${PDN}/value
 echo 0 > /sys/class/gpio/gpio${PDN}/value
 echo 0 > /sys/class/gpio/gpio${PDN}/value
+echo 1 > /sys/class/gpio/gpio${PDN}/value
+echo 1 > /sys/class/gpio/gpio${PDN}/value
 echo 1 > /sys/class/gpio/gpio${PDN}/value
 
 
@@ -71,10 +80,23 @@ REG01=`expr $((0x02)) + $SD`
 REG02=`expr $((0x00)) + $SLOW`
 REG05=`expr $((0x00)) + $SSLOW`
 
+REG08=$((0xC0))
+
+
+
+if [ ${MODE} -gt 0 ]
+then
+        i2cset -y 0 0x10 0x01 $REG01
+        i2cset -y 0 0x11 0x01 $REG01
+else
+        i2cset -y 0 0x10 0x01 $REG01
+fi
+
+
 
 if [ ${MODE} -eq 3 ]
 then
-	echo "MODE: DualMono Balance output mode"
+	echo "MODE: Dual Monaural - Balance output"
 	i2cset -y 0 0x10 0x01 $REG01
 	i2cset -y 0 0x11 0x01 $REG01
 	i2cset -y 0 0x10 0x02 `expr $((0x08)) + $REG02`
@@ -83,7 +105,7 @@ then
 	i2cset -y 0 0x11 0x05 `expr $((0x40)) + $REG05`
 elif [ ${MODE} -eq 2 ]
 then
-	echo "MODE: DualMono Unbalance output mode"
+	echo "MODE: Dual Monaural - Unbalance output"
 	i2cset -y 0 0x10 0x01 $REG01
 	i2cset -y 0 0x11 0x01 $REG01
 	i2cset -y 0 0x10 0x02 `expr $((0x08)) + $REG02`
@@ -92,7 +114,7 @@ then
 	i2cset -y 0 0x11 0x05 `expr $((0x00)) + $REG05`
 elif [ ${MODE} -eq 1 ]
 then
-	echo "MODE: Single Stereo x2 mode"
+	echo "MODE: Dual Stereo"
 	i2cset -y 0 0x10 0x01 $REG01
 	i2cset -y 0 0x10 0x02 $REG02
 	i2cset -y 0 0x10 0x05 $REG05
@@ -101,15 +123,17 @@ then
 	i2cset -y 0 0x11 0x02 $REG02
 	i2cset -y 0 0x11 0x05 $REG05
 else
-	echo "MODE: Single Stereo x1 mode"
+	echo "MODE: Single Stereo"
 	i2cset -y 0 0x10 0x01 $REG01
 	i2cset -y 0 0x10 0x02 $REG02
 	i2cset -y 0 0x10 0x05 $REG05
 fi
 
-
 if [ ${MODE} -gt 0 ]
 then
+	i2cset -y 0 0x10 0x08 $REG08
+	i2cset -y 0 0x11 0x08 $REG08
+
 	i2cset -y 0 0x10 0x03 ${VOLUME}
 	i2cset -y 0 0x10 0x04 ${VOLUME}
 	i2cset -y 0 0x11 0x03 ${VOLUME}
@@ -117,12 +141,17 @@ then
 	i2cset -y 0 0x10 0x00 $REG00
 	i2cset -y 0 0x11 0x00 $REG00
 else
+	i2cset -y 0 0x10 0x08 $REG08
+
 	i2cset -y 0 0x10 0x03 ${VOLUME}
 	i2cset -y 0 0x10 0x04 ${VOLUME}
 	i2cset -y 0 0x10 0x00 $REG00
 fi
 
 
+
+echo ""
+echo "AK449x register dump"
 
 if [ ${MODE} -gt 0 ]
 then
@@ -148,4 +177,6 @@ else
 fi
 
 
+
+echo 1 > /sys/class/gpio/gpio${MUTE}/value
 
