@@ -681,6 +681,11 @@ public:
 		DrawArea_ScrollImage( iDisplay, x, y, cx, cy ),
 		m_iFont( FONT_PATH, ((rotate % 180) == 0) ? m_nRectHeight : m_nRectWidth )
 	{
+		m_str			= "";
+		m_color			= 0xFFFFFFFF;
+		m_scroll_tick	= 1;
+		m_isSelected	= false;
+
 		m_nRotate		= rotate;
 		m_nDrawStyle	= 0;
 		
@@ -723,6 +728,17 @@ public:
 			
 			break;
 		}
+	}
+
+	void	SetSelect( bool isSelect )
+	{
+		m_isSelected		= !m_isSelected;
+		SetScrollText( m_str, m_color, m_scroll_tick );
+	}
+	
+	bool	IsSelected()
+	{
+		return	m_isSelected;
 	}
 
 	void	SetScrollText( const std::string& str, uint32_t color, int tick=1 )
@@ -777,6 +793,11 @@ public:
 			cv::cvtColor( gray, image, CV_GRAY2BGRA );
 		}
 		
+		if( m_isSelected )
+		{
+			cv::bitwise_not( image, image );
+		}
+		
 		switch( m_nRotate )
 		{
 		case 0:
@@ -800,9 +821,20 @@ public:
 			SetScrollImage( image, 0, tick );
 			break;
 		}
+
+		// Update member variables
+		m_str			= str;
+		m_color			= color;
+		m_scroll_tick	= tick;
 	}
 
 protected:
+
+	std::string	m_str;
+	uint32_t	m_color;
+	int			m_scroll_tick;
+	bool		m_isSelected;
+
 	int			m_nRotate;
 	ImageFont	m_iFont;
 };
