@@ -40,7 +40,7 @@ Volumio(Debian):
 //  Compile settings
 ///////////////////////////////
 
-#define	VOLUME_CTRL_I2C_AK449x	1
+//#define	VOLUME_CTRL_I2C_AK449x	1
 
 #define	GPIO_BUTTON_PREV		0
 #define	GPIO_BUTTON_NEXT		3
