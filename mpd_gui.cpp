@@ -23,14 +23,16 @@ Ubuntu + mpd:
 
 	apt install libcv-dev libopencv-dev opencv-doc fonts-takao-pgothic libtag1-dev
 
-	g++ -O3 -pthread -std=c++11 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags opencv` `pkg-config --libs opencv` `freetype-config --cflags` `freetype-config --libs` `taglib-config --cflags` `taglib-config --libs`
+	g++ -Ofast -pthread -std=c++11 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags opencv` `pkg-config --libs opencv` `freetype-config --cflags` `freetype-config --libs` `taglib-config --cflags` `taglib-config --libs`
 
 
 Volumio(Debian):
 
 	apt install libcv-dev libopencv-dev opencv-doc fonts-takao-gothic libtag1-dev
 
-	g++ -O3 -pthread -std=c++11 -DVOLUMIO=1 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags opencv` `pkg-config --libs opencv` `freetype-config --cflags` `freetype-config --libs` `taglib-config --cflags` `taglib-config --libs`
+	g++ -Ofast -pthread -std=c++11 -DVOLUMIO=1 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags opencv` `pkg-config --libs opencv` `freetype-config --cflags` `freetype-config --libs` `taglib-config --cflags` `taglib-config --libs` -mfpu=neon
+
+
 
 */
 
@@ -38,7 +40,7 @@ Volumio(Debian):
 //  Compile settings
 ///////////////////////////////
 
-//#define	VOLUME_CTRL_I2C_AK449x	1
+#define	VOLUME_CTRL_I2C_AK449x	1
 
 #define	GPIO_BUTTON_PREV		0
 #define	GPIO_BUTTON_NEXT		3
@@ -77,7 +79,9 @@ Volumio(Debian):
 #define	MUSIC_ROOT_PATH		"/media/"
 #endif
 
-
+#if VOLUME_CTRL_I2C_AK449x
+#include "common/ctrl_i2c.h"
+#endif
 
 #define	FONT_PATH			"/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf"
 #define	FONT_DATE_PATH		"/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
@@ -342,42 +346,47 @@ void	Draw( cv::Mat& dst, int x, int y, cv::Mat& src )
 	int				src_stride	= src.step;
 	uint8_t*		dst_image	= dst.data;
 	int				dst_stride	= dst.step;
-	int				cx			= src.cols;
-	int				cy			= src.rows;
-
-	if( x < 0 )
+	
+	if( (src_image != NULL) && 
+		(dst_image != NULL) )
 	{
-		src_image   -= x * src.elemSize();
-		cx			+= x;
-		x			= 0;
-	}
-
-	if( dst.cols < (x + cx) )
-	{
-		cx  = dst.cols - x;
-	}
-
-	if( y < 0 )
-	{
-		src_image	-= y * src_stride;
-		cy			+= y;
-		y			= 0;
-	}
-
-	if( dst.rows < (y + cy) )
-	{
-		cy  = dst.rows - y;
-	}
-
-	if( (0 < cx) && (0 < cy) )
-	{
-		dst_image	+= y * dst_stride + x * dst.elemSize();
-		
-		for( int r = 0; r < cy; r++ )
+		int				cx			= src.cols;
+		int				cy			= src.rows;
+	
+		if( x < 0 )
 		{
-			memcpy( dst_image, src_image, cx * src.elemSize() );
-			src_image	+= src_stride;
-			dst_image	+= dst_stride;
+			src_image   -= x * src.elemSize();
+			cx			+= x;
+			x			= 0;
+		}
+	
+		if( dst.cols < (x + cx) )
+		{
+			cx  = dst.cols - x;
+		}
+	
+		if( y < 0 )
+		{
+			src_image	-= y * src_stride;
+			cy			+= y;
+			y			= 0;
+		}
+	
+		if( dst.rows < (y + cy) )
+		{
+			cy  = dst.rows - y;
+		}
+	
+		if( (0 < cx) && (0 < cy) )
+		{
+			dst_image	+= y * dst_stride + x * dst.elemSize();
+			
+			for( int r = 0; r < cy; r++ )
+			{
+				memcpy( dst_image, src_image, cx * src.elemSize() );
+				src_image	+= src_stride;
+				dst_image	+= dst_stride;
+			}
 		}
 	}
 }
@@ -395,7 +404,7 @@ public:
 		m_nRectWidth	= cx;
 		m_nRectHeight	= cy;
 		
-		m_iAreaImage	= cv::Mat::zeros( CV_8UC1, cy, cx );
+		m_iAreaImage	= cv::Mat::zeros( cy, cx, CV_8UC1 );
 	}
 
 	virtual	void	UpdateInfo( std::map<std::string,std::string>& map )=0;
@@ -415,17 +424,397 @@ protected:
 	cv::Mat		m_iAreaImage;
 };
 
-
-class DrawArea_STR : public DrawAreaIF
+class DrawArea_ScrollImage : public DrawAreaIF
 {
 public:
-	DrawArea_STR( const std::string& tag, uint32_t color, DisplayIF& iDisplay, int x, int y, int cx, int cy, bool isRightAlign=false ) :
-		DrawAreaIF( iDisplay, x, y, cx, cy ),
-		m_iFont( FONT_PATH, m_nRectHeight )
+	enum	DRAW_STYLE
+	{
+		DRAW_ALIGN_LEFT		= 0x0,
+		DRAW_ALIGN_RIGHT	= 0x1,
+		DRAW_ALIGN_CENTER	= 0x2,
+		DRAW_VALIGN_TOP		= 0x0,
+		DRAW_VALIGN_BOTTOM	= 0x4,
+		DRAW_VALIGN_CENTER	= 0x8,
+	};
+
+	DrawArea_ScrollImage( DisplayIF& iDisplay, int x, int y, int cx, int cy, unsigned int nDrawStyle = 0 ) :
+		DrawAreaIF( iDisplay, x, y, cx, cy )
+	{
+		m_nDrawStyle		= nDrawStyle;
+		m_iScrlTick.x		= 0;	// 0< : Right to left scroll, <0 : Left to right scroll.
+		m_iScrlTick.y		= 0;	// 0< : Bottom to top scroll, <0 : Top to bottom scroll.
+		m_iScrlCurrentPos.x	= 0;	// LeftTop
+		m_iScrlCurrentPos.y	= 0;	// LeftTop
+	}
+	
+	void	SetScrollImage( cv::Mat& image, int ScrlTickX=1, int ScrlTickY=0 )
+	{
+		int		x			= 0;
+		int		y			= 0;
+
+		m_iScrlTick.x		= 0;
+		m_iScrlTick.y		= 0;
+		m_iScrlImage		= image;
+
+		// Horizon
+		if( m_nDrawStyle & DRAW_ALIGN_CENTER )
+		{
+			m_iScrlCurrentPos.x	= (m_iAreaImage.cols - m_iScrlImage.cols) / 2;
+		}
+		else if( m_nDrawStyle & DRAW_ALIGN_RIGHT )
+		{
+			m_iScrlCurrentPos.x	= m_iAreaImage.cols - m_iScrlImage.cols;
+		}
+		else
+		{
+			m_iScrlCurrentPos.x	= 0;
+		}
+		x	= m_iScrlCurrentPos.x;
+
+		if( (ScrlTickX != 0) &&
+			(m_iAreaImage.cols < m_iScrlImage.cols) )
+		{
+			m_iScrlTick.x	= ScrlTickX;
+			if( 0 < ScrlTickX )	
+			{
+				// Right to left scroll
+				// Force left align
+				// 0 ~ m_iAreaImage.cols : static
+				// -m_iAreaImage.cols ~ -1 : scroll right to left
+				m_iScrlCurrentPos.x	= m_iAreaImage.cols;
+				x					= 0;
+			}
+			else if( ScrlTickX < 0 )
+			{
+				// Left to right scroll
+				// Force right align
+				// -m_iAreaImage.cols ~ 0 : static	
+				// 1 ~ m_iAreaImage.cols : scroll left to right
+				m_iScrlCurrentPos.x	= -m_iAreaImage.cols;
+				x					= m_iScrlImage.cols - m_iAreaImage.cols;
+			}
+		}
+
+		// Vertical
+		if( m_nDrawStyle & DRAW_VALIGN_CENTER )
+		{
+			m_iScrlCurrentPos.y	= (m_iAreaImage.rows - m_iScrlImage.rows) / 2;
+		}
+		else if( m_nDrawStyle & DRAW_VALIGN_BOTTOM )
+		{
+			m_iScrlCurrentPos.y	= m_iAreaImage.rows - m_iScrlImage.rows;
+		}
+		else
+		{
+			m_iScrlCurrentPos.y	= 0;
+		}
+		y	= m_iScrlCurrentPos.y;
+
+		if( (ScrlTickY != 0) &&
+			(m_iAreaImage.rows < m_iScrlImage.rows) )
+		{
+			m_iScrlTick.y	= ScrlTickY;
+			if( 0 < ScrlTickY )
+			{
+				// Bottom to top scroll
+				// Force top align
+				// 0 ~ m_iAreaImage.rows : static
+				// -m_iAreaImage.rows ~ -1 : scroll bottom to top
+				m_iScrlCurrentPos.y	= m_iAreaImage.rows;
+				y					= 0;
+			}
+			else if( ScrlTickY < 0 )
+			{
+				// Top to bottom scroll
+				// -m_iAreaImage.rows ~ 0 : static	
+				// 1 ~ m_iAreaImage.rows : scroll top to bottom
+				m_iScrlCurrentPos.y	= -m_iAreaImage.rows;
+				y					= m_iScrlImage.rows - m_iAreaImage.rows;
+			}
+			y	= 0;
+		}
+
+		// Draw initial image
+		m_iAreaImage	= cv::Mat::zeros( m_iAreaImage.rows, m_iAreaImage.cols, m_iScrlImage.type() );
+		Draw( m_iAreaImage, x, y, m_iScrlImage );
+
+		switch( m_iAreaImage.type() )
+		{
+		case CV_8UC4:
+			m_iDisp.WriteImageBGRA(
+				m_nRectX,
+				m_nRectY,
+				m_iAreaImage.data,
+				m_iAreaImage.step,
+				m_iAreaImage.cols,
+				m_iAreaImage.rows );
+			break;
+
+		case CV_8UC1:
+			m_iDisp.WriteImageGRAY(
+				m_nRectX,
+				m_nRectY,
+				m_iAreaImage.data,
+				m_iAreaImage.step,
+				m_iAreaImage.cols,
+				m_iAreaImage.rows );
+			break;
+		}
+	}
+	
+	bool	UpdateScroll()
+	{
+		int		x			= m_iScrlCurrentPos.x;
+		int		y			= m_iScrlCurrentPos.y;
+
+		if( m_iScrlTick.x != 0 )
+		{
+			m_iScrlCurrentPos.x	-= m_iScrlTick.x;
+
+			if( 0 < m_iScrlTick.x )
+			{
+				if( m_iScrlCurrentPos.x < -m_iScrlImage.cols )
+				{
+					m_iScrlCurrentPos.x	= m_iScrlImage.cols;
+				}
+				x	= m_iScrlCurrentPos.x;
+				if( 0 < x )
+				{
+					x	= 0;
+				}
+			}
+			else
+			{
+				if( m_iAreaImage.cols < m_iScrlCurrentPos.x )
+				{
+					m_iScrlCurrentPos.x	= - m_iScrlImage.cols;
+				}
+				x	= m_iScrlCurrentPos.x;
+				if( x < 0 )
+				{
+					x	= 0;
+				}
+				
+				x	+= m_iScrlImage.cols - m_iAreaImage.cols;
+			}
+		}
+
+		if( m_iScrlTick.y != 0 )
+		{
+			m_iScrlCurrentPos.y	-= m_iScrlTick.y;
+
+			if( 0 < m_iScrlTick.y )
+			{
+				if( m_iScrlCurrentPos.y < -m_iScrlImage.rows )
+				{
+					m_iScrlCurrentPos.y	= m_iScrlImage.rows;
+				}
+				y	= m_iScrlCurrentPos.y;
+				if( 0 < y )
+				{
+					y	= 0;
+				}
+			}
+			else
+			{
+				if( m_iAreaImage.rows < m_iScrlCurrentPos.y )
+				{
+					m_iScrlCurrentPos.y	= - m_iScrlImage.rows;
+				}
+				y	= m_iScrlCurrentPos.y;
+				if( y < 0 )
+				{
+					y	= 0;
+				}
+				
+				y	+= m_iScrlImage.rows - m_iAreaImage.rows;
+			}
+		}
+
+		if( (m_iScrlTick.x != 0) ||
+			(m_iScrlTick.y != 0) )
+		{
+			m_iAreaImage	= cv::Mat::zeros( m_iAreaImage.rows, m_iAreaImage.cols, m_iAreaImage.type() );
+			Draw( m_iAreaImage, x, y, m_iScrlImage );
+
+			switch( m_iAreaImage.type() )
+			{
+			case CV_8UC4:
+				m_iDisp.WriteImageBGRA(
+					m_nRectX,
+					m_nRectY,
+					m_iAreaImage.data,
+					m_iAreaImage.step,
+					m_iAreaImage.cols,
+					m_iAreaImage.rows );
+				return	true;
+				break;
+	
+			case CV_8UC1:
+				m_iDisp.WriteImageGRAY(
+					m_nRectX,
+					m_nRectY,
+					m_iAreaImage.data,
+					m_iAreaImage.step,
+					m_iAreaImage.cols,
+					m_iAreaImage.rows );
+				return	true;
+				break;
+			}
+		}
+
+		return	false;
+	}
+	
+protected:
+	unsigned int	m_nDrawStyle;
+	cv::Mat			m_iScrlImage;
+	cv::Point2i		m_iScrlTick;
+	cv::Point2i		m_iScrlCurrentPos;
+};
+
+
+class DrawArea_ScrollText : public DrawArea_ScrollImage
+{
+public:
+	DrawArea_ScrollText( DisplayIF& iDisplay, int x, int y, int cx, int cy, unsigned int nDrawStyle = 0, int rotate=0 ) :
+		DrawArea_ScrollImage( iDisplay, x, y, cx, cy ),
+		m_iFont( FONT_PATH, ((rotate % 180) == 0) ? m_nRectHeight : m_nRectWidth )
+	{
+		m_nRotate		= rotate;
+		m_nDrawStyle	= 0;
+		
+		switch( m_nRotate )
+		{
+		case 0:
+			m_nDrawStyle	= nDrawStyle;
+			break;
+			
+		case 90:
+			if( nDrawStyle & DRAW_ALIGN_RIGHT )			m_nDrawStyle	|= DRAW_VALIGN_TOP;
+			else if( nDrawStyle & DRAW_ALIGN_CENTER )	m_nDrawStyle	|= DRAW_VALIGN_CENTER;
+			else										m_nDrawStyle	|= DRAW_VALIGN_BOTTOM;
+
+			if( nDrawStyle & DRAW_VALIGN_TOP )			m_nDrawStyle	|= DRAW_ALIGN_LEFT;
+			else if( nDrawStyle & DRAW_VALIGN_CENTER )	m_nDrawStyle	|= DRAW_ALIGN_CENTER;
+			else										m_nDrawStyle	|= DRAW_ALIGN_RIGHT;
+			
+			break;
+
+		case 180:
+			if( nDrawStyle & DRAW_ALIGN_RIGHT )			m_nDrawStyle	|= DRAW_ALIGN_LEFT;
+			else if( nDrawStyle & DRAW_ALIGN_CENTER )	m_nDrawStyle	|= DRAW_ALIGN_CENTER;
+			else										m_nDrawStyle	|= DRAW_ALIGN_RIGHT;
+
+			if( nDrawStyle & DRAW_VALIGN_TOP )			m_nDrawStyle	|= DRAW_VALIGN_BOTTOM;
+			else if( nDrawStyle & DRAW_VALIGN_CENTER )	m_nDrawStyle	|= DRAW_VALIGN_CENTER;
+			else										m_nDrawStyle	|= DRAW_VALIGN_TOP;
+			
+			break;
+
+		case 270:
+			if( nDrawStyle & DRAW_ALIGN_RIGHT )			m_nDrawStyle	|= DRAW_VALIGN_BOTTOM;
+			else if( nDrawStyle & DRAW_ALIGN_CENTER )	m_nDrawStyle	|= DRAW_VALIGN_CENTER;
+			else										m_nDrawStyle	|= DRAW_VALIGN_TOP;
+
+			if( nDrawStyle & DRAW_VALIGN_TOP )			m_nDrawStyle	|= DRAW_ALIGN_RIGHT;
+			else if( nDrawStyle & DRAW_VALIGN_CENTER )	m_nDrawStyle	|= DRAW_ALIGN_CENTER;
+			else										m_nDrawStyle	|= DRAW_ALIGN_LEFT;
+			
+			break;
+		}
+	}
+
+	void	SetScrollText( const std::string& str, uint32_t color, int tick=1 )
+	{
+		int	l,t,r,b,w,h;
+		m_iFont.CalcRect( l,t,r,b, str.c_str() );
+
+		switch( m_nRotate )
+		{
+		case 0:
+		case 180:
+			w	= r;
+			h	= m_nRectHeight;
+			break;
+		
+		case 90:
+		case 270:
+			w	= r;
+			h	= m_nRectWidth;
+			break;
+		}
+
+		cv::Mat		image;
+		if( 1 < m_iDisp.GetBPP() )
+		{
+			image	= cv::Mat::zeros( h, w, CV_8UC4 );
+			m_iFont.DrawTextBGRA(
+				0,
+				0,
+				str.c_str(),
+				color,
+				image.data,
+				image.step,
+				image.cols, 
+				image.rows );
+		}
+		else
+		{
+			cv::Mat	gray	= cv::Mat::zeros( h, w, CV_8UC1 );
+
+			m_iFont.DrawTextGRAY(
+				0,
+				0,
+				str.c_str(),
+				255,
+				gray.data,
+				gray.step,
+				gray.cols,
+				gray.rows );
+			
+			cv::threshold( gray, gray, 128, 255, CV_THRESH_BINARY );
+			cv::cvtColor( gray, image, CV_GRAY2BGRA );
+		}
+		
+		switch( m_nRotate )
+		{
+		case 0:
+			SetScrollImage( image, tick, 0 );
+			break;
+			
+		case 180:
+			cv::flip( image, image, -1 );
+			SetScrollImage( image, -tick, 0 );
+			break;
+			
+		case 90:
+			cv::transpose(image, image);
+			cv::flip(image, image, 0);
+			SetScrollImage( image, 0, -tick );
+			break;
+
+		case 270:
+			cv::transpose(image, image);
+			cv::flip(image, image, 1);
+			SetScrollImage( image, 0, tick );
+			break;
+		}
+	}
+
+protected:
+	int			m_nRotate;
+	ImageFont	m_iFont;
+};
+
+class DrawArea_STR : public DrawArea_ScrollText
+{
+public:
+	DrawArea_STR( const std::string& tag, uint32_t color, DisplayIF& iDisplay, int x, int y, int cx, int cy, int isRightAlign=false, int rotate=0 ) :
+		DrawArea_ScrollText( iDisplay, x, y, cx, cy, 0 < isRightAlign ? DRAW_ALIGN_RIGHT : isRightAlign < 0 ? DRAW_ALIGN_CENTER : DRAW_ALIGN_LEFT, rotate )
 	{
 		m_strTag		= tag;
 		m_nColor		= color;
-		m_isRightAlign	= isRightAlign;
 	}
 
 	virtual	void	UpdateInfo( std::map<std::string,std::string>& map )
@@ -435,75 +824,30 @@ public:
 
 		if( m_nCurrent != str )
 		{
-			int	l,t,r,b;
-			m_iFont.CalcRect( l,t,r,b, str.c_str() );
-
-			m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC4 );
-			m_iImage		= cv::Mat::zeros( m_nRectHeight, r, CV_8UC4 );
 			m_nCurrent		= str;
-			m_nOffsetX		= m_nRectWidth;
 
-			if( 1 < m_iDisp.GetBPP() )
-			{
-				m_iFont.DrawTextBGRA( 0, 0, str.c_str(), m_nColor, m_iImage.data, m_iImage.step, m_iImage.cols, m_iImage.rows );
-			}
-			else
-			{
-				cv::Mat	gray	= cv::Mat::zeros( m_iImage.rows, m_iImage.cols, CV_8UC1 );
-
-				m_iFont.DrawTextGRAY( 0, 0, str.c_str(), 255, gray.data, gray.step, gray.cols, gray.rows );
-				
-				cv::threshold( gray, gray, 128, 255, CV_THRESH_BINARY );
-				cv::cvtColor( gray, m_iImage, CV_GRAY2BGRA );
-			}
-	
-			if( m_isRightAlign && (r < m_nRectWidth) )
-			{
-				Draw( m_iAreaImage, m_iAreaImage.cols-r, 0, m_iImage );
-			}
-			else
-			{
-				Draw( m_iAreaImage, 0, 0, m_iImage );
-			}
-
-			m_iDisp.WriteImageBGRA( m_nRectX, m_nRectY, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+			SetScrollText( m_nCurrent, m_nColor );
 		}
-		
-		if( m_nRectWidth < m_iImage.cols )
+		else
 		{
-			int		x	= m_nOffsetX;
-			
-			x	= 0 < x ? 0 : x;
-
-			m_nOffsetX -= (m_iDisp.GetSize().width + 239) / 240;
-			m_nOffsetX	= -m_iImage.cols <= m_nOffsetX ? m_nOffsetX : m_nRectWidth;
-
-			m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC4 );
-			Draw( m_iAreaImage, x, 0, m_iImage );
-			m_iDisp.WriteImageBGRA( m_nRectX, m_nRectY, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+			UpdateScroll();
 		}
 	}
 	
 protected:
 	std::string	m_strTag;
-	cv::Mat		m_iImage;
-	int			m_nOffsetX;
-	bool		m_isRightAlign;
-	ImageFont	m_iFont;
 	uint32_t	m_nColor;
 };
 
 
-class DrawArea_StaticText : public DrawAreaIF
+class DrawArea_StaticText : public DrawArea_ScrollText
 {
 public:
 	DrawArea_StaticText( const std::string& text, uint32_t color, DisplayIF& iDisplay, int x, int y, int cx, int cy, bool isRightAlign=false ) :
-		DrawAreaIF( iDisplay, x, y, cx, cy ),
-		m_iFont( FONT_PATH, m_nRectHeight )
+		DrawArea_ScrollText( iDisplay, x, y, cx, cy, isRightAlign ? DRAW_ALIGN_RIGHT : DRAW_ALIGN_LEFT )
 	{
 		m_strText		= text;
 		m_nColor		= color;
-		m_isRightAlign	= isRightAlign;
 	}
 
 	virtual	void	UpdateInfo( std::map<std::string,std::string>& map )
@@ -512,83 +856,36 @@ public:
 
 		if( m_nCurrent != str )
 		{
-			int	l,t,r,b;
-			m_iFont.CalcRect( l,t,r,b, str.c_str() );
-
-			m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC4 );
-			m_iImage		= cv::Mat::zeros( m_nRectHeight, r, CV_8UC4 );
 			m_nCurrent		= str;
-			m_nOffsetX		= m_nRectWidth;
 
-			if( 1 < m_iDisp.GetBPP() )
-			{
-				m_iFont.DrawTextBGRA( 0, 0, str.c_str(), m_nColor, m_iImage.data, m_iImage.step, m_iImage.cols, m_iImage.rows );
-			}
-			else
-			{
-				cv::Mat	gray	= cv::Mat::zeros( m_iImage.rows, m_iImage.cols, CV_8UC1 );
-
-				m_iFont.DrawTextGRAY( 0, 0, str.c_str(), 255, gray.data, gray.step, gray.cols, gray.rows );
-				
-				cv::threshold( gray, gray, 128, 255, CV_THRESH_BINARY );
-				cv::cvtColor( gray, m_iImage, CV_GRAY2BGRA );
-			}
-	
-			if( m_isRightAlign && (r < m_nRectWidth) )
-			{
-				Draw( m_iAreaImage, m_iAreaImage.cols-r, 0, m_iImage );
-			}
-			else
-			{
-				Draw( m_iAreaImage, 0, 0, m_iImage );
-			}
-
-			m_iDisp.WriteImageBGRA( m_nRectX, m_nRectY, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+			SetScrollText( m_nCurrent, m_nColor );
 		}
-		
-		if( m_nRectWidth < m_iImage.cols )
+		else
 		{
-			int		x	= m_nOffsetX;
-			
-			x	= 0 < x ? 0 : x;
-
-			m_nOffsetX -= (m_iDisp.GetSize().width + 239) / 240;
-			m_nOffsetX	= -m_iImage.cols <= m_nOffsetX ? m_nOffsetX : m_nRectWidth;
-
-			m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC4 );
-			Draw( m_iAreaImage, x, 0, m_iImage );
-			m_iDisp.WriteImageBGRA( m_nRectX, m_nRectY, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+			UpdateScroll();
 		}
 	}
 	
 protected:
 	std::string	m_strText;
-	cv::Mat		m_iImage;
-	int			m_nOffsetX;
-	bool		m_isRightAlign;
-	ImageFont	m_iFont;
 	uint32_t	m_nColor;
 };
 
 
 
-class DrawArea_MyIpAddr : public DrawAreaIF
+class DrawArea_MyIpAddr : public DrawArea_ScrollText
 {
 public:
 	DrawArea_MyIpAddr( uint32_t color, DisplayIF& iDisplay, int x, int y, int cx, int cy, bool isRightAlign=false ) :
-		DrawAreaIF( iDisplay, x, y, cx, cy ),
-		m_iFont( FONT_PATH, m_nRectHeight )
+		DrawArea_ScrollText( iDisplay, x, y, cx, cy, isRightAlign ? DRAW_ALIGN_RIGHT : DRAW_ALIGN_LEFT )
 	{
-		m_nColor		= color;
-		m_isRightAlign	= isRightAlign;
-		
-		m_iLastChecked	= std::chrono::high_resolution_clock::now();
 		m_strText		= Socket::GetMyIpAddrString();
+		m_nColor		= 0xFFFFFFFF;
+		m_iLastChecked	= std::chrono::high_resolution_clock::now();
 	}
 
 	virtual	void	UpdateInfo( std::map<std::string,std::string>& map )
 	{
-		
 		std::chrono::high_resolution_clock::time_point   current	= std::chrono::high_resolution_clock::now();
         double	elapsed = std::chrono::duration_cast<std::chrono::seconds>(current-m_iLastChecked).count();
 
@@ -611,63 +908,18 @@ public:
 		{
 			m_nCurrent	= m_strText;
 
-			int	l,t,r,b;
-			m_iFont.CalcRect( l,t,r,b, m_strText.c_str() );
-
-			m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC4 );
-			m_iImage		= cv::Mat::zeros( m_nRectHeight, r, CV_8UC4 );
-			m_nCurrent		= m_strText;
-			m_nOffsetX		= m_nRectWidth;
-
-			if( 1 < m_iDisp.GetBPP() )
-			{
-				m_iFont.DrawTextBGRA( 0, 0, m_nCurrent.c_str(), m_nColor, m_iImage.data, m_iImage.step, m_iImage.cols, m_iImage.rows );
-			}
-			else
-			{
-				cv::Mat	gray	= cv::Mat::zeros( m_iImage.rows, m_iImage.cols, CV_8UC1 );
-
-				m_iFont.DrawTextGRAY( 0, 0, m_nCurrent.c_str(), 255, gray.data, gray.step, gray.cols, gray.rows );
-				
-				cv::threshold( gray, gray, 128, 255, CV_THRESH_BINARY );
-				cv::cvtColor( gray, m_iImage, CV_GRAY2BGRA );
-			}
-	
-			if( m_isRightAlign && (r < m_nRectWidth) )
-			{
-				Draw( m_iAreaImage, m_iAreaImage.cols-r, 0, m_iImage );
-			}
-			else
-			{
-				Draw( m_iAreaImage, 0, 0, m_iImage );
-			}
-
-			m_iDisp.WriteImageBGRA( m_nRectX, m_nRectY, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+			SetScrollText( m_nCurrent, m_nColor );
 		}
-		
-		if( m_nRectWidth < m_iImage.cols )
+		else
 		{
-			int		x	= m_nOffsetX;
-			
-			x	= 0 < x ? 0 : x;
-
-			m_nOffsetX -= (m_iDisp.GetSize().width + 239) / 240;
-			m_nOffsetX	= -m_iImage.cols <= m_nOffsetX ? m_nOffsetX : m_nRectWidth;
-
-			m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC4 );
-			Draw( m_iAreaImage, x, 0, m_iImage );
-			m_iDisp.WriteImageBGRA( m_nRectX, m_nRectY, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+			UpdateScroll();
 		}
 	}
 	
 protected:
    	std::chrono::high_resolution_clock::time_point	m_iLastChecked;
    	std::string										m_strText;
-	cv::Mat		m_iImage;
-	int			m_nOffsetX;
-	bool		m_isRightAlign;
-	ImageFont	m_iFont;
-	uint32_t	m_nColor;
+   	uint32_t										m_nColor;
 };
 
 
@@ -1230,6 +1482,8 @@ protected:
 		}
 		else if( cx == cy )
 		{
+//*
+			// Normal
 			int	m	= 2;
 			big	= 36 * cy / 240; // 48
 			med	= 32 * cy / 240; // 36
@@ -1250,6 +1504,59 @@ protected:
 			iDrawAreas.push_back( new DrawArea_STR( "Date",		white,	*it,	x,	y,				cx - x,		med	) );	y += med + 2;
 			iDrawAreas.push_back( new DrawArea_CpuTemp(					*it,	x,	cy-sml*2-m*2,	cx - x,		sml ) );	y += med + 2;
 			iDrawAreas.push_back( new DrawArea_STR( "audio",	white,	*it,	x,	cy-sml-m,		cx - x,		sml	) );
+//*/
+/*
+			int	m	= 0;
+			big	= 32 * cy / 240; // 48
+			med	= 28 * cy / 240; // 36
+			sml	= 20 * cy / 240;
+			ind	=  4 * cy / 240;
+	
+			x	= m;
+			y	= m;
+			iDrawAreas.push_back( new DrawArea_STR( "Title",	blue,	*it,	x,	y,			cx - 2*x,	big,	false	) );	y += big + 2;
+			iDrawAreas.push_back( new DrawArea_PlayPos(					*it,	x,	y,			cx - 2*x,	ind				) );	y += ind + 2;
+			iDrawAreas.push_back( new DrawArea_STR( "Album",	white,	*it,	x,	y,			cx - 2*x,	med,	false	) );	y += med + 2;
+			iDrawAreas.push_back( new DrawArea_STR( "Artist",	white,	*it,	x,	y,			cx - 2*x,	med,	false	) );	y += med + 2;
+	
+			x	= m * 2;
+			csz	= cy - y - m * 2;
+			iDrawAreas.push_back( new DrawArea_CoverImage(				*it,	x,	y,			csz,		csz	) );	x += csz + 8;
+
+//			iDrawAreas.push_back( new DrawArea_STR( "Date",		white,	*it,	x,	y,				cx - x,		med	) );	y += med + 2;
+//			iDrawAreas.push_back( new DrawArea_CpuTemp(					*it,	x,	cy-sml*2-m*2,	cx - x,		sml ) );	y += med + 2;
+//			iDrawAreas.push_back( new DrawArea_STR( "audio",	white,	*it,	x,	cy-sml-m,		cx - x,		sml	) );
+			iDrawAreas.push_back( new DrawArea_STR( "audio",	white,	*it,	x,	y,				sml,		csz, true, 270	) );
+//*/
+			
+/*
+			// Centering
+			int	m	= 0;
+			big	= 32 * cy / 240; // 48
+			med	= 28 * cy / 240; // 36
+			sml	= 24 * cy / 240;
+			ind	=  4 * cy / 240;
+	
+			x	= m;
+			y	= m;
+			iDrawAreas.push_back( new DrawArea_STR( "Title",	blue,	*it,	x,	y,			cx - 2*x,	big,	-1	) );	y += big + 2;
+			iDrawAreas.push_back( new DrawArea_PlayPos(					*it,	x,	y,			cx - 2*x,	ind			) );	y += ind + 2;
+			iDrawAreas.push_back( new DrawArea_STR( "Artist",	white,	*it,	x,	y,			cx - 2*x,	med,	-1	) );	y += med + 2;
+//			iDrawAreas.push_back( new DrawArea_STR( "Album",	white,	*it,	x,	y,			cx - 2*x,	med,	-1	) );	y += med + 2;
+	
+			x	= m * 2;
+			csz	= cy - y - m * 2;	
+			x	= (cx - csz) / 2;
+
+			iDrawAreas.push_back( new DrawArea_STR( "Album",	white,	*it,	x - sml - 4,	y,	sml,	cy - y,	true, 270	) );
+			iDrawAreas.push_back( new DrawArea_CoverImage(				*it,	x,				y,	csz,	csz	) );
+			iDrawAreas.push_back( new DrawArea_STR( "audio",	white,	*it,	x + csz + 4,	y,	sml,	cy - y, true, 270	) );
+
+//			iDrawAreas.push_back( new DrawArea_STR( "Date",		white,	*it,	x,	y,				cx - x,		med	) );	y += med + 2;
+//			iDrawAreas.push_back( new DrawArea_CpuTemp(					*it,	x,	cy-sml*2-m*2,	cx - x,		sml ) );	y += med + 2;
+//			iDrawAreas.push_back( new DrawArea_STR( "audio",	white,	*it,	x,	cy-sml-m,		cx - x,		sml	) );
+//*/		
+		
 		}
 		else
 		{
