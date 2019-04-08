@@ -2,9 +2,21 @@
 #
 #	Copyright (C) 2017-2019 blue-7 (http://qiita.com/blue-7)
 
+#NanoPi-NEO2
 PDN="199"
 MUTE="200"
 I2CBUS="0"
+
+#RaspberryPi Zero
+#PDN="4"
+#MUTE="23"
+#I2CBUS="1"
+
+
+
+# DAC I2C ADDR
+CH0=${CH0:=0x10}
+CH1=${CH1:=0x11}
 
 
 # 255=0db, 254=-0.5dB,,, 231=-12dB
@@ -89,10 +101,10 @@ REG08=$((0xC0))
 
 if [ ${MODE} -gt 0 ]
 then
-        i2cset -y ${I2CBUS} 0x10 0x01 $REG01
-        i2cset -y ${I2CBUS} 0x11 0x01 $REG01
+        i2cset -y ${I2CBUS} ${CH0} 0x01 $REG01
+        i2cset -y ${I2CBUS} ${CH1} 0x01 $REG01
 else
-        i2cset -y ${I2CBUS} 0x10 0x01 $REG01
+        i2cset -y ${I2CBUS} ${CH0} 0x01 $REG01
 fi
 
 
@@ -100,55 +112,55 @@ fi
 if [ ${MODE} -eq 3 ]
 then
 	echo "MODE: Dual Monaural - Balance output"
-	i2cset -y ${I2CBUS} 0x10 0x01 $REG01
-	i2cset -y ${I2CBUS} 0x11 0x01 $REG01
-	i2cset -y ${I2CBUS} 0x10 0x02 `expr $((0x08)) + $REG02`
-	i2cset -y ${I2CBUS} 0x11 0x02 `expr $((0x0A)) + $REG02`
-	i2cset -y ${I2CBUS} 0x10 0x05 `expr $((0x40)) + $REG05`
-	i2cset -y ${I2CBUS} 0x11 0x05 `expr $((0x40)) + $REG05`
+	i2cset -y ${I2CBUS} ${CH0} 0x01 $REG01
+	i2cset -y ${I2CBUS} ${CH1} 0x01 $REG01
+	i2cset -y ${I2CBUS} ${CH0} 0x02 `expr $((0x08)) + $REG02`
+	i2cset -y ${I2CBUS} ${CH1} 0x02 `expr $((0x0A)) + $REG02`
+	i2cset -y ${I2CBUS} ${CH0} 0x05 `expr $((0x40)) + $REG05`
+	i2cset -y ${I2CBUS} ${CH1} 0x05 `expr $((0x40)) + $REG05`
 elif [ ${MODE} -eq 2 ]
 then
 	echo "MODE: Dual Monaural - Unbalance output"
-	i2cset -y ${I2CBUS} 0x10 0x01 $REG01
-	i2cset -y ${I2CBUS} 0x11 0x01 $REG01
-	i2cset -y ${I2CBUS} 0x10 0x02 `expr $((0x08)) + $REG02`
-	i2cset -y ${I2CBUS} 0x11 0x02 `expr $((0x0A)) + $REG02`
-	i2cset -y ${I2CBUS} 0x10 0x05 `expr $((0x00)) + $REG05`
-	i2cset -y ${I2CBUS} 0x11 0x05 `expr $((0x00)) + $REG05`
+	i2cset -y ${I2CBUS} ${CH0} 0x01 $REG01
+	i2cset -y ${I2CBUS} ${CH1} 0x01 $REG01
+	i2cset -y ${I2CBUS} ${CH0} 0x02 `expr $((0x08)) + $REG02`
+	i2cset -y ${I2CBUS} ${CH1} 0x02 `expr $((0x0A)) + $REG02`
+	i2cset -y ${I2CBUS} ${CH0} 0x05 `expr $((0x00)) + $REG05`
+	i2cset -y ${I2CBUS} ${CH1} 0x05 `expr $((0x00)) + $REG05`
 elif [ ${MODE} -eq 1 ]
 then
 	echo "MODE: Dual Stereo"
-	i2cset -y ${I2CBUS} 0x10 0x01 $REG01
-	i2cset -y ${I2CBUS} 0x10 0x02 $REG02
-	i2cset -y ${I2CBUS} 0x10 0x05 $REG05
+	i2cset -y ${I2CBUS} ${CH0} 0x01 $REG01
+	i2cset -y ${I2CBUS} ${CH0} 0x02 $REG02
+	i2cset -y ${I2CBUS} ${CH0} 0x05 $REG05
 
-	i2cset -y ${I2CBUS} 0x11 0x01 $REG01
-	i2cset -y ${I2CBUS} 0x11 0x02 $REG02
-	i2cset -y ${I2CBUS} 0x11 0x05 $REG05
+	i2cset -y ${I2CBUS} ${CH1} 0x01 $REG01
+	i2cset -y ${I2CBUS} ${CH1} 0x02 $REG02
+	i2cset -y ${I2CBUS} ${CH1} 0x05 $REG05
 else
 	echo "MODE: Single Stereo"
-	i2cset -y ${I2CBUS} 0x10 0x01 $REG01
-	i2cset -y ${I2CBUS} 0x10 0x02 $REG02
-	i2cset -y ${I2CBUS} 0x10 0x05 $REG05
+	i2cset -y ${I2CBUS} ${CH0} 0x01 $REG01
+	i2cset -y ${I2CBUS} ${CH0} 0x02 $REG02
+	i2cset -y ${I2CBUS} ${CH0} 0x05 $REG05
 fi
 
 if [ ${MODE} -gt 0 ]
 then
-	i2cset -y ${I2CBUS} 0x10 0x08 $REG08
-	i2cset -y ${I2CBUS} 0x11 0x08 $REG08
+	i2cset -y ${I2CBUS} ${CH0} 0x08 $REG08
+	i2cset -y ${I2CBUS} ${CH1} 0x08 $REG08
 
-	i2cset -y ${I2CBUS} 0x10 0x03 ${VOLUME}
-	i2cset -y ${I2CBUS} 0x10 0x04 ${VOLUME}
-	i2cset -y ${I2CBUS} 0x11 0x03 ${VOLUME}
-	i2cset -y ${I2CBUS} 0x11 0x04 ${VOLUME}
-	i2cset -y ${I2CBUS} 0x10 0x00 $REG00
-	i2cset -y ${I2CBUS} 0x11 0x00 $REG00
+	i2cset -y ${I2CBUS} ${CH0} 0x03 ${VOLUME}
+	i2cset -y ${I2CBUS} ${CH0} 0x04 ${VOLUME}
+	i2cset -y ${I2CBUS} ${CH1} 0x03 ${VOLUME}
+	i2cset -y ${I2CBUS} ${CH1} 0x04 ${VOLUME}
+	i2cset -y ${I2CBUS} ${CH0} 0x00 $REG00
+	i2cset -y ${I2CBUS} ${CH1} 0x00 $REG00
 else
-	i2cset -y ${I2CBUS} 0x10 0x08 $REG08
+	i2cset -y ${I2CBUS} ${CH0} 0x08 $REG08
 
-	i2cset -y ${I2CBUS} 0x10 0x03 ${VOLUME}
-	i2cset -y ${I2CBUS} 0x10 0x04 ${VOLUME}
-	i2cset -y ${I2CBUS} 0x10 0x00 $REG00
+	i2cset -y ${I2CBUS} ${CH0} 0x03 ${VOLUME}
+	i2cset -y ${I2CBUS} ${CH0} 0x04 ${VOLUME}
+	i2cset -y ${I2CBUS} ${CH0} 0x00 $REG00
 fi
 
 
@@ -158,25 +170,25 @@ echo "AK449x register dump"
 
 if [ ${MODE} -gt 0 ]
 then
-	i2cget -y ${I2CBUS} 0x10 0x00
-	i2cget -y ${I2CBUS} 0x11 0x00
-	i2cget -y ${I2CBUS} 0x10 0x01
-	i2cget -y ${I2CBUS} 0x11 0x01
-	i2cget -y ${I2CBUS} 0x10 0x02
-	i2cget -y ${I2CBUS} 0x11 0x02
-	i2cget -y ${I2CBUS} 0x10 0x03
-	i2cget -y ${I2CBUS} 0x11 0x03
-	i2cget -y ${I2CBUS} 0x10 0x04
-	i2cget -y ${I2CBUS} 0x11 0x04
-	i2cget -y ${I2CBUS} 0x10 0x05
-	i2cget -y ${I2CBUS} 0x11 0x05
+	i2cget -y ${I2CBUS} ${CH0} 0x00
+	i2cget -y ${I2CBUS} ${CH1} 0x00
+	i2cget -y ${I2CBUS} ${CH0} 0x01
+	i2cget -y ${I2CBUS} ${CH1} 0x01
+	i2cget -y ${I2CBUS} ${CH0} 0x02
+	i2cget -y ${I2CBUS} ${CH1} 0x02
+	i2cget -y ${I2CBUS} ${CH0} 0x03
+	i2cget -y ${I2CBUS} ${CH1} 0x03
+	i2cget -y ${I2CBUS} ${CH0} 0x04
+	i2cget -y ${I2CBUS} ${CH1} 0x04
+	i2cget -y ${I2CBUS} ${CH0} 0x05
+	i2cget -y ${I2CBUS} ${CH1} 0x05
 else
-	i2cget -y ${I2CBUS} 0x10 0x00
-	i2cget -y ${I2CBUS} 0x10 0x01
-	i2cget -y ${I2CBUS} 0x10 0x02
-	i2cget -y ${I2CBUS} 0x10 0x03
-	i2cget -y ${I2CBUS} 0x10 0x04
-	i2cget -y ${I2CBUS} 0x10 0x05
+	i2cget -y ${I2CBUS} ${CH0} 0x00
+	i2cget -y ${I2CBUS} ${CH0} 0x01
+	i2cget -y ${I2CBUS} ${CH0} 0x02
+	i2cget -y ${I2CBUS} ${CH0} 0x03
+	i2cget -y ${I2CBUS} ${CH0} 0x04
+	i2cget -y ${I2CBUS} ${CH0} 0x05
 fi
 
 
