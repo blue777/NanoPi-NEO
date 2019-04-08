@@ -1098,7 +1098,16 @@ public:
 	{
 		int			x = 0;
 		char		buf[128];
-		float		cpuTemp	= std::stof( StringUtil::GetTextFromFile( "/sys/class/thermal/thermal_zone0/temp") ) / 1000.0f;
+		float		cpuTemp	= 0;
+		
+		try
+		{
+			cpuTemp	= std::stof( StringUtil::GetTextFromFile( "/sys/class/thermal/thermal_zone0/temp") ) / 1000.0f;
+		}
+		catch( std::exception& ex )
+		{
+			printf( "EXCEPTION! Get CpuTemp :  %s\n", ex.what() );
+		}
 	
 		sprintf( buf, u8"cpu %.1f C", cpuTemp );
 
@@ -1264,30 +1273,29 @@ public:
 			{
 				std::string	strStatus;
 		
+				try
 				{
 					Socket		iSock;
 					std::string	strCurrentSong;
 
 					if( 0 == iSock.connect( MPD_HOST, MPD_PORT ) )
 					{
-						try
-						{
-							iSock	>> strStatus;	// DummyRead
+						iSock	>> strStatus;	// DummyRead
 
-							iSock	<< "currentsong\n";
-							iSock	>> strCurrentSong;
-							iSock	<< "status\n";
-							iSock	>> strStatus;
-						}
-						catch(...)
-						{
-						}
+						iSock	<< "currentsong\n";
+						iSock	>> strCurrentSong;
+						iSock	<< "status\n";
+						iSock	>> strStatus;
+
+						strStatus	+= strCurrentSong;
 					}
-
-					strStatus	+= strCurrentSong;
 				}
-
-//				printf( "%s\n", strStatus.c_str() );
+				catch( const char * reason )
+				{
+					printf( "EXCEPTION!! : %s\n", reason );
+					printf( "%s\n", strStatus.c_str() );
+					strStatus	= "";
+				}
 
 				iInfo		= MusicController::SplitMpdStatus( strStatus );
 
@@ -1457,7 +1465,7 @@ protected:
 	
 		if( cy < cx )
 		{
-			if( 64 < cy )
+			if( 80 < cy )
 			{
 				int	m	= 2;
 				big	= 48 * cy / 240; 

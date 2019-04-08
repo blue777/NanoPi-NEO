@@ -29,6 +29,8 @@ std::vector<DisplayIF*>	GetUsrDisplays()
 //	iDisplays.push_back( new Display_ILI9486_spi(270) );
 //	iDisplays.push_back( new Display_fbdev("/dev/fb1") );
 	iDisplays.push_back( new Display_ST7789_IPS_240x240_spi(0) );
+//	iDisplays.push_back( new Display_ST7789_IPS_spi(270) );
+//	iDisplays.push_back( new Display_ST7735_IPS_80x160_spi(270) );
 
 	return	iDisplays;
 }

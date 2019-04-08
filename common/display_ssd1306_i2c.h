@@ -164,6 +164,7 @@ public:
 
 			ImageConvert::BGRA8888toGRAY8( image, stride, cx, cy, dst, m_tDispSize.width );
 			ImageHalftoning::ErrDiff_LinearFloydSteinberg( dst, m_tDispSize.width, cx, cy );
+//			ImageHalftoning::ErrDiff_FloydSteinberg( dst, m_tDispSize.width, cx, cy );
 			
 			TransferImage( x, y, cx, cy );
 		}

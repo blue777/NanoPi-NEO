@@ -68,3 +68,33 @@ public:
 		return	0;
 	}
 };
+
+class Display_ST7789_IPS_spi : public Display_RGB565_spi8
+{
+public:
+	Display_ST7789_IPS_spi( int nRotate, int nGpioCS=-1, int nGpioDC=201, int nGpioReset=1, int nGpioBackLight=65 ) :
+		Display_RGB565_spi8(
+			240,
+			320,
+			0,
+			nRotate,
+			nGpioCS,
+			nGpioDC,
+			nGpioReset,
+			nGpioBackLight,
+			33 * 1000000 )
+	{
+	}
+
+	virtual	int	Init()
+	{
+		if( 0 != Display_RGB565_spi8::Init() )
+		{
+			return	-1;
+		}
+		
+		// INVON
+		WriteReg(	0x21 );
+		return	0;
+	}
+};

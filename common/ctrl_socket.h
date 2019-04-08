@@ -59,7 +59,7 @@ public:
 		if( m_iSock < 0 )
 		{
 			printf("socket::socket(), socket ret %d\n", m_iSock );
-			throw;
+			throw	"socket::socket() FAILED.";
 		}
 	}
 	

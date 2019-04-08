@@ -57,3 +57,59 @@ public:
 		return	0;
 	}
 };
+
+
+
+class Display_ST7735_IPS_80x160_spi : public Display_RGB565_spi8
+{
+public:
+	Display_ST7735_IPS_80x160_spi( int nRotate, int nGpioCS=-1, int nGpioDC=201, int nGpioReset=1, int nGpioBackLight=65 ) :
+		Display_RGB565_spi8(
+			80,
+			160,
+			DISP_CTRL_BGR,
+			nRotate,
+			nGpioCS,
+			nGpioDC,
+			nGpioReset,
+			nGpioBackLight,
+			10 * 1000000 )
+	{
+	}
+
+	virtual	int	Init()
+	{
+		if( 0 != Display_RGB565_spi8::Init() )
+		{
+			return	-1;
+		}
+		
+		// INVON
+		WriteReg(	0x21 );
+
+		return	0;
+	}
+
+	virtual	int		TransferRGB( int x, int y, int cx, int cy, const uint8_t * image, int image_bytes )
+	{
+		int		ox	= 26;	// (132 -  80) / 2
+		int		oy	= 1;	// (162 - 160) / 2
+		
+		if( m_nDispCtrl & DISP_CTRL_SWAP_HV )
+		{
+			ox	= 1;
+			oy	= 26;
+		}
+
+		if( m_nDispCtrl & DISP_CTRL_MIRROR_H ){}
+		if( m_nDispCtrl & DISP_CTRL_MIRROR_V ){}
+
+		return	Display_RGB565_spi8::TransferRGB(
+			x + ox,
+			y + oy,
+			cx,
+			cy,
+			image,
+			image_bytes );
+	}
+};
