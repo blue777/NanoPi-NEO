@@ -72,6 +72,15 @@ Volumio(Debian):
 #define	VOLUMIO					0
 #endif
 
+#ifndef FEATURE_INA219
+#define	FEATURE_INA219			0
+#endif
+
+#if VOLUMIO
+#undef	VOLUME_CTRL_I2C_AK449x
+#define	VOLUME_CTRL_I2C_AK449x	0
+#endif
+
 
 #if VOLUMIO
 #define	MUSIC_ROOT_PATH		"/mnt/"
@@ -956,6 +965,118 @@ protected:
 
 
 
+class DrawArea_Battery : public DrawArea_ScrollText
+{
+public:
+
+	void	UpdateBatteryStatus()
+	{
+		double	v, a;
+
+		{
+			const double	v_1lsb  = 0.004;			//  4mV
+			const double	s_1lsb  = 0.00001;			// 10uV
+			const double	s_reg	= 0.005 + 0.0007;
+			int16_t			value;
+
+			uint8_t  w_data[1]	= { 0x01 };
+			uint8_t  r_data[2]	= { 0x00, 0x00 };
+
+			// read shunt
+			w_data[0]   = 0x01;
+			m_i2c.write( w_data, sizeof(w_data) );
+			m_i2c.read( r_data, sizeof(r_data) );
+			value		= (r_data[0] << 8) | r_data[1];
+
+			a	= value * s_1lsb / s_reg;
+
+			// read vbus
+			w_data[0]   = 0x02;
+			m_i2c.write( w_data, sizeof(w_data) );
+			m_i2c.read( r_data, sizeof(r_data) );
+			value		= (r_data[0] << 8) | r_data[1];
+			value		>>= 3;
+
+			v	= value * v_1lsb;
+		}
+
+		
+		char	szBuf[128];
+		sprintf( szBuf, "%.3fV %.3fA", v, a );
+		
+		m_strText	= szBuf;
+		m_nColor	= 10 <= v ? 0xFFFFFFFF : 0xFFFF0000;
+
+
+/*
+		FILE*	fp	= fopen( "/media/nas/Battery.csv","a");
+		if( fp != NULL )
+		{
+			std::chrono::high_resolution_clock::time_point   current	= std::chrono::high_resolution_clock::now();
+	        double	elapsed = std::chrono::duration_cast<std::chrono::seconds>(current-m_iStarted).count();
+
+			std::time_t 	t	= std::time(nullptr);
+			std::tm*		tl	= std::localtime(&t);
+	
+			fprintf( fp, "%02d:%02d:%02d, %.3f, %.3f\r\n", tl->tm_hour, tl->tm_min, tl->tm_sec, elapsed, value );
+			fclose(fp);
+		}
+*/
+	}
+
+
+	DrawArea_Battery( DisplayIF& iDisplay, int x, int y, int cx, int cy, bool isRightAlign=false ) :
+		DrawArea_ScrollText( iDisplay, x, y, cx, cy, isRightAlign ? DRAW_ALIGN_RIGHT : DRAW_ALIGN_LEFT ),
+		m_i2c( "/dev/i2c-0", 0x45 )
+	{
+		m_iStarted		= std::chrono::high_resolution_clock::now();
+
+		UpdateBatteryStatus();
+		m_iLastChecked	= std::chrono::high_resolution_clock::now();
+
+		// Initialize
+		{
+			uint8_t  w_data[3]	= { 0x00, 0x07, 0xFF };
+    		m_i2c.write( w_data, sizeof(w_data) );
+		}
+	}
+
+	virtual	void	UpdateInfo( std::map<std::string,std::string>& map )
+	{
+		std::chrono::high_resolution_clock::time_point   current	= std::chrono::high_resolution_clock::now();
+        double	elapsed = std::chrono::duration_cast<std::chrono::seconds>(current-m_iLastChecked).count();
+
+        if( 1 <= elapsed )
+        {
+        	m_iLastChecked	= current;
+
+			UpdateBatteryStatus();
+ 		}
+ 		
+		if( m_nCurrent != m_strText )
+		{
+			m_nCurrent	= m_strText;
+
+			SetScrollText( m_nCurrent, m_nColor );
+		}
+		else
+		{
+			UpdateScroll();
+		}
+	}
+	
+protected:
+	ctrl_i2c										m_i2c;
+   	std::chrono::high_resolution_clock::time_point	m_iStarted;
+   	
+   	std::chrono::high_resolution_clock::time_point	m_iLastChecked;
+   	std::string										m_strText;
+   	uint32_t										m_nColor;
+};
+
+
+
+
 class DrawArea_PlayPos: public DrawAreaIF
 {
 public:
@@ -1484,9 +1605,15 @@ protected:
 				iDrawAreas.push_back( new DrawArea_CoverImage(				*it,	x,	y,			csz,		csz	) );	x += csz + 8;
 				iDrawAreas.push_back( new DrawArea_STR( "Album",	white,	*it,	x,	y,			cx - x,		med	) );	y += med + 2;
 				iDrawAreas.push_back( new DrawArea_STR( "Date",		white,	*it,	x,	y,			cx - x,		med	) );	y += med + 2;
-				iDrawAreas.push_back( new DrawArea_STR( "audio",	white,	*it,	x,	cy-sml-m,	cx - x,		sml	) );
-		
-				iDrawAreas.push_back( new DrawArea_CpuTemp(					*it,	x,	y,			cx - x,		med ) );
+				iDrawAreas.push_back( new DrawArea_STR( "audio",	white,	*it,	x,	y,			cx - x,		sml	) );	y += sml;
+
+#if FEATURE_INA219
+				int	tiny	= (cy - y) / 2;
+				iDrawAreas.push_back( new DrawArea_CpuTemp(					*it,	x,	cy-tiny*2,	cx - x,		tiny ) );
+				iDrawAreas.push_back( new DrawArea_Battery(					*it,	x,	cy-tiny,	cx - x,		tiny ) );
+#else
+				iDrawAreas.push_back( new DrawArea_CpuTemp(					*it,	x,	cy-sml,		cx - x,		sml ) );
+#endif
 			}
 			else if( 32 < cy )
 			{
@@ -1692,12 +1819,19 @@ protected:
 	
 		cy	= font_height * 4 / 10;
 		cy	= y+cy < it->GetSize().height ? cy : it->GetSize().height - y;
+		
+		cy	= cy * 2 / 3;
 
 		// ip addr
 		iDrawAreas.push_back( new DrawArea_MyIpAddr(	0xFFFFFFFF,	*it,	0,	y,	it->GetSize().width - x,	cy,	true ) );	y	+= cy;
 
 		// cpu temp
 		iDrawAreas.push_back( new DrawArea_CpuTemp( *it,	0,	y,	it->GetSize().width - x,	cy,	true ) );	y	+= cy;
+
+#if FEATURE_INA219
+		// battery voltage
+		iDrawAreas.push_back( new DrawArea_Battery(	*it,	0,	y,	it->GetSize().width - x,	cy,	true ) );	y	+= cy;
+#endif
 	}
 
 	void	SetupButtons()
