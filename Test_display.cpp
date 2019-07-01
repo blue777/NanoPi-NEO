@@ -159,7 +159,8 @@ int main()
 //	display.push_back( new Display_WaveShare40_spi(0) );		// for WaveShare 3.5 inch LCD 320x480
 //	display.push_back( new Display_fbdev("/dev/fb1"));
 //	display.push_back( new Display_ILI9486_spi(0) );
-	display.push_back( new 	Display_ST7789_IPS_240x240_spi(0) );
+//	display.push_back( new 	Display_ST7789_IPS_240x240_spi(0) );
+	display.push_back( new 	Display_ST7735_IPS_80x160_spi(270) );
 
 	////////////////////////////////////////////////////////////////
 	// DisplayIF::Init()
