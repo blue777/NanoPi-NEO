@@ -67,6 +67,41 @@ public:
 
 		return	0;
 	}
+
+	virtual	int		TransferRGB( int x, int y, int cx, int cy, const uint8_t * image, int image_bytes )
+	{
+		int		ox	= 0;
+		int		oy	= 0;
+
+		if( m_nDispCtrl & DISP_CTRL_MIRROR_H )
+		{
+			ox	= 0;
+			oy	= 0;
+		}
+
+		if( m_nDispCtrl & DISP_CTRL_MIRROR_V )
+		{
+			ox	= 0;
+			oy	= 320 - 240;
+		}
+
+		if( m_nDispCtrl & DISP_CTRL_SWAP_HV )
+		{
+			int	t;
+
+			t	= ox;
+			ox	= oy;
+			oy	= t;
+		}
+
+		return	Display_RGB565_spi8::TransferRGB(
+			x + ox,
+			y + oy,
+			cx,
+			cy,
+			image,
+			image_bytes );
+	}
 };
 
 

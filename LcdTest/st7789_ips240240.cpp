@@ -5,7 +5,9 @@
 
 int main( int argc, char* argv[] )
 {
-	Display_ST7789_IPS_240x240_spi	iDisp(0);
+	int	rotate	= 2 <= argc ? atoi( argv[1] ) : 0;
+
+	Display_ST7789_IPS_240x240_spi	iDisp(rotate);
 
 	return	DrawPattern( iDisp );
 }
