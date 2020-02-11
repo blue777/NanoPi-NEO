@@ -25,6 +25,11 @@ Ubuntu + mpd:
 
 	g++ -Ofast -pthread -std=c++11 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags opencv` `pkg-config --libs opencv` `freetype-config --cflags` `freetype-config --libs` `taglib-config --cflags` `taglib-config --libs`
 
+Ubuntu + mpd NasPiDac
+
+	apt install libcv-dev libopencv-dev opencv-doc fonts-takao-pgothic libtag1-dev
+
+	g++ -Ofast -pthread -std=c++11 -DVOLUME_CTRL_I2C_AK449x=1 -DFEATURE_INA219=1 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags opencv` `pkg-config --libs opencv` `freetype-config --cflags` `freetype-config --libs` `taglib-config --cflags` `taglib-config --libs`
 
 Volumio(Debian):
 
@@ -32,23 +37,9 @@ Volumio(Debian):
 
 	g++ -Ofast -pthread -std=c++11 -DVOLUMIO=1 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags opencv` `pkg-config --libs opencv` `freetype-config --cflags` `freetype-config --libs` `taglib-config --cflags` `taglib-config --libs` -mfpu=neon
 
-
-
 */
 
-///////////////////////////////
-//  Compile settings
-///////////////////////////////
-
-//#define	VOLUME_CTRL_I2C_AK449x	1
-
-#define	GPIO_BUTTON_PREV		0
-#define	GPIO_BUTTON_NEXT		3
-#define	GPIO_BUTTON_PLAY		2
-
-
-
-
+#include <string.h>
 #include <map>
 #include <string>
 #include <ctime>
@@ -61,45 +52,18 @@ Volumio(Debian):
 #include "common/string_util.h"
 #include "common/ctrl_socket.h"
 #include "CoverArtExtractor.h"
+
 #include "usr_displays.h"
+#include "mpd_gui_conf.h"
 
 
-#ifndef VOLUME_CTRL_I2C_AK449x
-#define	VOLUME_CTRL_I2C_AK449x	0
-#endif
+#include "common/ctrl_i2c.h"
 
-#ifndef VOLUMIO
-#define	VOLUMIO					0
-#endif
-
-#ifndef FEATURE_INA219
-#define	FEATURE_INA219			0
-#endif
-
-#if VOLUMIO
-#undef	VOLUME_CTRL_I2C_AK449x
-#define	VOLUME_CTRL_I2C_AK449x	0
-#endif
-
-
-#if VOLUMIO
-#define	MUSIC_ROOT_PATH		"/mnt/"
-#else
-#define	MUSIC_ROOT_PATH		"/media/"
-#endif
 
 #if VOLUME_CTRL_I2C_AK449x
 #include "common/ctrl_i2c.h"
 #endif
 
-#define	FONT_PATH			"/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf"
-#define	FONT_DATE_PATH		"/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
-
-#define	MPD_HOST			"127.0.0.1"
-#define	MPD_PORT			6600
-
-#define	VOLUMIO_HOST		"127.0.0.1"
-#define VOLUMIO_PORT		3000
 
 
 
@@ -188,7 +152,7 @@ public:
 		int				value		= 0;
 
 		{
-			ctrl_i2c		iic( "/dev/i2c-0",0x10 );
+			ctrl_i2c		iic( "/dev/i2c-0",AK449x_CH0 );
 			iic.write( dataL, 1 );
 			iic.read( &dataL[1], 1 );
 
@@ -213,7 +177,7 @@ public:
 		}
 
 		{
-			ctrl_i2c		iicR( "/dev/i2c-0",0x11 );
+			ctrl_i2c		iicR( "/dev/i2c-0",AK449x_CH1 );
 			iicR.write( dataL, 2 );
 			iicR.write( dataR, 2 );
 		}
@@ -1290,6 +1254,7 @@ protected:
 };
 
 
+/*
 class DrawArea_Time: public DrawAreaIF
 {
 public:
@@ -1330,8 +1295,105 @@ protected:
 	int			m_nOffsetX;
 	int			m_nOffsetY;
 };
+/*/
+class DrawArea_Time: public DrawAreaIF
+{
+public:
+	DrawArea_Time( DisplayIF& iDisplay, int x, int y, int cx, int cy ) : 
+		DrawAreaIF( iDisplay, x, y, cx, cy ),
+		m_iFont( FONT_DATE_PATH, m_nRectHeight, false )
+	{
+		int	l,t,r,b;
 
+		m_iFont.CalcRect( l,t,r,b, "88:88" );
+		m_nOffsetY		= (cy - (b-t)) / 2 - t;
 
+		m_iFont.CalcRect( l,t,r,b, ":" );
+		m_nColonWidth	= (r - l) * 3;
+		m_nColonX		= (m_nColonWidth - (r-l)) / 2 - l;
+		printf("colon %d, %d, %d, %d\n", l, t, r, b );
+
+		m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC1 );
+		Reset();
+	};
+
+	virtual	void	Reset()
+	{
+		m_nLastHour		= -1;
+		m_nLastMinute	= -1;
+		m_nLastSecond	= -1;
+	}
+
+	virtual	void	UpdateInfo( std::map<std::string,std::string>& map )
+	{
+		char			buf[32];
+		std::time_t 	t	= std::time(nullptr);
+		std::tm*		tl	= std::localtime(&t);
+
+		if( (m_nLastHour != tl->tm_hour) ||
+			(m_nLastMinute != tl->tm_min))
+		{
+			int	ColonX	= (m_nRectWidth - m_nColonWidth) / 2;
+			int	l,t,r,b;
+
+			m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC1 );
+
+			// hour
+			sprintf( buf, "%02d", tl->tm_hour );
+			m_iFont.CalcRect( l,t,r,b, buf );
+			m_iFont.DrawTextGRAY( ColonX - r, m_nOffsetY, buf, 255, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+
+			// colon
+			if( (tl->tm_sec & 1) == 0 )
+			{
+				sprintf( buf, ":" );
+				m_iFont.DrawTextGRAY( ColonX + m_nColonX, m_nOffsetY, buf, 255, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+			}
+
+			// minute
+			sprintf( buf, "%02d", tl->tm_min );
+			m_iFont.DrawTextGRAY( ColonX + m_nColonWidth, m_nOffsetY, buf, 255, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+
+			// Transfer image
+			m_iDisp.WriteImageGRAY( m_nRectX, m_nRectY, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+
+			// Update variables
+			m_nLastHour		= tl->tm_hour;
+			m_nLastMinute	= tl->tm_min;
+			m_nLastSecond	= tl->tm_sec;
+		}
+		else if( m_nLastSecond != tl->tm_sec )
+		{
+			int	ColonX	= (m_nRectWidth - m_nColonWidth) / 2;
+			
+			// Clear image
+			cv::rectangle( m_iAreaImage, cv::Point(ColonX,0), cv::Point(ColonX+m_nColonWidth, m_nRectHeight), cv::Scalar(0), CV_FILLED);
+			
+			if( (tl->tm_sec & 1) == 0 )
+			{
+				sprintf( buf, ":" );
+				m_iFont.DrawTextGRAY( ColonX + m_nColonX, m_nOffsetY, buf, 255, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+			}
+
+			// Transfer image
+			m_iDisp.WriteImageGRAY( m_nRectX + ColonX, m_nRectY, m_iAreaImage.data + ColonX, m_iAreaImage.step, m_nColonWidth, m_iAreaImage.rows );
+
+			// Update variables
+			m_nLastSecond	= tl->tm_sec;
+		}
+	}
+
+protected:
+	ImageFont	m_iFont;
+	int			m_nLastHour;
+	int			m_nLastMinute;
+	int			m_nLastSecond;
+
+	int			m_nColonWidth;
+	int			m_nColonX;
+	int			m_nOffsetY;
+};
+//*/
 
 class MpdGui
 {
@@ -1927,9 +1989,19 @@ protected:
 
 
 
-int	main()
+int	main( int argc, char* argv[] )
 {
 	MpdGui	iMPD;
+	
+	if( 1 < argc )
+	{
+		if( 0 == strcmp( argv[1], "zishan" ) )
+		{
+			printf( "MODE = ZiShanDSD\n");
+			AK449x_CH0	= 0x12;
+			AK449x_CH1	= 0x10;
+		}
+	}
 	
 	if( !iMPD.Initialize() )
 	{
