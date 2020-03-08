@@ -133,8 +133,8 @@ public:
 		CONFIG(General, FontDatePath,	"/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf");
 		CONFIG(General, MusicRootPath,	"/mnt/");
 
-		CONFIG(Battery, Low,  10000);
-		CONFIG(Battery, High, 12600);
+		CONFIG(Battery, Empty,	10000);
+		CONFIG(Battery, Full,	12600);
 
 		CONFIG(GpioButtons, Left,	0);
 		CONFIG(GpioButtons, Center,	2);
@@ -153,8 +153,8 @@ public:
 
 	struct
 	{
-		int		High;
-		int		Low;
+		int		Empty;
+		int		Full;
 	} Battery;
 
 	struct
@@ -209,6 +209,9 @@ mpd_gui_conf	g_settings;
 #define	FONT_PATH			g_settings.General.FontPath.c_str()
 #define	FONT_DATE_PATH		g_settings.General.FontDatePath.c_str()
 
+#define	BATTERY_EMPTY		g_settings.Battery.Empty
+#define	BATTERY_FULL		g_settings.Battery.Full
+
 #ifndef VOLUME_CTRL_I2C_AK449x
 #define	VOLUME_CTRL_I2C_AK449x	0
 #endif
@@ -218,7 +221,7 @@ mpd_gui_conf	g_settings;
 #endif
 
 #ifndef FEATURE_INA219
-#define	FEATURE_INA219			0
+#define	FEATURE_INA219			1
 #endif
 
 #if VOLUMIO

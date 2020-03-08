@@ -226,7 +226,8 @@ public:
 				if( 0 == error )
 				{
 					int	l	= slot->bitmap_left;
-					int	r	= slot->bitmap_left + slot->bitmap.width;
+//					int	r	= slot->bitmap_left + slot->bitmap.width;
+					int	r	= (pen.x + slot->advance.x) / 64;
 					int	t	= m_nBaseline - slot->bitmap_top;
 					int	b	= m_nBaseline - slot->bitmap_top + slot->bitmap.rows;
 	

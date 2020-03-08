@@ -29,7 +29,7 @@ Ubuntu + mpd NasPiDac
 
 	apt install libcv-dev libopencv-dev opencv-doc fonts-takao-pgothic libtag1-dev
 
-	g++ -Ofast -pthread -std=c++11 -DVOLUME_CTRL_I2C_AK449x=1 -DFEATURE_INA219=1 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags opencv` `pkg-config --libs opencv` `freetype-config --cflags` `freetype-config --libs` `taglib-config --cflags` `taglib-config --libs`
+	g++ -Ofast -pthread -std=c++11 -DVOLUME_CTRL_I2C_AK449x=1 mpd_gui.cpp -o mpd_gui.cpp.o `pkg-config --cflags opencv` `pkg-config --libs opencv` `freetype-config --cflags` `freetype-config --libs` `taglib-config --cflags` `taglib-config --libs`
 
 Volumio(Debian):
 
@@ -51,6 +51,7 @@ Volumio(Debian):
 #include "common/ctrl_http.h"
 #include "common/string_util.h"
 #include "common/ctrl_socket.h"
+#include "common/ctrl_pmoni.h"
 #include "CoverArtExtractor.h"
 
 #include "usr_displays.h"
@@ -935,74 +936,53 @@ public:
 
 	void	UpdateBatteryStatus()
 	{
-		double	v, a;
-
+		if( m_piPowerMon != NULL )
 		{
-			const double	v_1lsb  = 0.004;			//  4mV
-			const double	s_1lsb  = 0.00001;			// 10uV
-			const double	s_reg	= 0.005 + 0.0007;
-			int16_t			value;
+			double	v	= m_piPowerMon->GetV();
+			double	a	= m_piPowerMon->GetA();
 
-			uint8_t  w_data[1]	= { 0x01 };
-			uint8_t  r_data[2]	= { 0x00, 0x00 };
+			char	szBuf[128];
+			sprintf( szBuf, "%.3fV %.3fA", v, a );
 
-			// read shunt
-			w_data[0]   = 0x01;
-			m_i2c.write( w_data, sizeof(w_data) );
-			m_i2c.read( r_data, sizeof(r_data) );
-			value		= (r_data[0] << 8) | r_data[1];
+			m_strText	= szBuf;
+			m_nColor	= BATTERY_EMPTY <= (v * 1000) ? 0xFFFFFFFF : 0xFFFF0000;
 
-			a	= value * s_1lsb / s_reg;
 
-			// read vbus
-			w_data[0]   = 0x02;
-			m_i2c.write( w_data, sizeof(w_data) );
-			m_i2c.read( r_data, sizeof(r_data) );
-			value		= (r_data[0] << 8) | r_data[1];
-			value		>>= 3;
+	/*
+			FILE*	fp	= fopen( "/media/nas/Battery.csv","a");
+			if( fp != NULL )
+			{
+				std::chrono::high_resolution_clock::time_point   current	= std::chrono::high_resolution_clock::now();
+		        double	elapsed = std::chrono::duration_cast<std::chrono::seconds>(current-m_iStarted).count();
 
-			v	= value * v_1lsb;
-		}
-
+				std::time_t 	t	= std::time(nullptr);
+				std::tm*		tl	= std::localtime(&t);
 		
-		char	szBuf[128];
-		sprintf( szBuf, "%.3fV %.3fA", v, a );
-		
-		m_strText	= szBuf;
-		m_nColor	= 10 <= v ? 0xFFFFFFFF : 0xFFFF0000;
-
-
-/*
-		FILE*	fp	= fopen( "/media/nas/Battery.csv","a");
-		if( fp != NULL )
-		{
-			std::chrono::high_resolution_clock::time_point   current	= std::chrono::high_resolution_clock::now();
-	        double	elapsed = std::chrono::duration_cast<std::chrono::seconds>(current-m_iStarted).count();
-
-			std::time_t 	t	= std::time(nullptr);
-			std::tm*		tl	= std::localtime(&t);
-	
-			fprintf( fp, "%02d:%02d:%02d, %.3f, %.3f\r\n", tl->tm_hour, tl->tm_min, tl->tm_sec, elapsed, value );
-			fclose(fp);
+				fprintf( fp, "%02d:%02d:%02d, %.3f, %.3f\r\n", tl->tm_hour, tl->tm_min, tl->tm_sec, elapsed, value );
+				fclose(fp);
+			}
+	*/
 		}
-*/
 	}
 
 
 	DrawArea_Battery( DisplayIF& iDisplay, int x, int y, int cx, int cy, bool isRightAlign=false ) :
-		DrawArea_ScrollText( iDisplay, x, y, cx, cy, isRightAlign ? DRAW_ALIGN_RIGHT : DRAW_ALIGN_LEFT ),
-		m_i2c( "/dev/i2c-0", 0x45 )
+		DrawArea_ScrollText( iDisplay, x, y, cx, cy, isRightAlign ? DRAW_ALIGN_RIGHT : DRAW_ALIGN_LEFT )
 	{
+		try
+		{
+			m_piPowerMon	= new PMoni_INA219;
+		}
+		catch( std::exception &e )
+		{
+			printf( "DrawArea_Battery, %s\n", e.what() );
+			m_piPowerMon	= NULL;
+		}
+
 		m_iStarted		= std::chrono::high_resolution_clock::now();
 
 		UpdateBatteryStatus();
 		m_iLastChecked	= std::chrono::high_resolution_clock::now();
-
-		// Initialize
-		{
-			uint8_t  w_data[3]	= { 0x00, 0x07, 0xFF };
-    		m_i2c.write( w_data, sizeof(w_data) );
-		}
 	}
 
 	virtual	void	UpdateInfo( std::map<std::string,std::string>& map )
@@ -1030,14 +1010,158 @@ public:
 	}
 	
 protected:
-	ctrl_i2c										m_i2c;
-   	std::chrono::high_resolution_clock::time_point	m_iStarted;
-   	
-   	std::chrono::high_resolution_clock::time_point	m_iLastChecked;
-   	std::string										m_strText;
-   	uint32_t										m_nColor;
+	ctrl_PowerMonitor*								m_piPowerMon;
+	std::chrono::high_resolution_clock::time_point	m_iStarted;
+	
+	std::chrono::high_resolution_clock::time_point	m_iLastChecked;
+	std::string										m_strText;
+	uint32_t										m_nColor;
 };
 
+
+
+class DrawArea_BatteryIcon : public DrawAreaIF
+{
+public:
+	void	UpdateBatteryStatus()
+	{
+		m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC4 );
+
+		if( m_piPowerMon != NULL )
+		{
+			const int	icon_cx	= 16;
+			const int	icon_cy	= 32;
+
+			const int	l		= (m_nRectWidth  - (icon_cx * m_nScale)) / 2;
+			const int	t		= (m_nRectHeight - (icon_cy * m_nScale)) / 2;
+			const int	w		= icon_cx * m_nScale;
+			const int	h		= icon_cy * m_nScale;
+			const int	s		= m_nScale;
+
+			const int	mV		= (int)(1000 * m_piPowerMon->GetV());
+			const int	mA		= (int)(1000 * m_piPowerMon->GetA());
+			char		szBuf[128];
+			
+			cv::Scalar	color_frame		= cv::Scalar(192,192,192,255);
+			cv::Scalar	color_cell		= color_frame;//cv::Scalar(128,128,128,255);
+
+			cv::Scalar	color_red		= cv::Scalar(  0,  0,255,255);
+			cv::Scalar	color_yellow	= cv::Scalar(  0,255,255,255 );
+			
+			sprintf( szBuf, "%d mV", mV );
+			m_strText	= szBuf;
+
+			// Draw battery frame
+			cv::rectangle( m_iAreaImage,cv::Point2i(  1*s+l, 4*s+t), cv::Point2i( 14*s+l,30*s+t), color_frame, CV_FILLED );
+			cv::rectangle( m_iAreaImage,cv::Point2i(  4*s+l, 1*s+t), cv::Point2i( 11*s+l, 3*s+t), color_frame, CV_FILLED );
+
+			cv::rectangle( m_iAreaImage,cv::Point2i(  2*s+l, 5*s+t), cv::Point2i( 13*s+l,29*s+t), cv::Scalar(  0,  0,  0,255),CV_FILLED );
+			cv::rectangle( m_iAreaImage,cv::Point2i(  5*s+l, 2*s+t), cv::Point2i( 10*s+l, 4*s+t), cv::Scalar(  0,  0,  0,255),CV_FILLED );
+
+			if( BATTERY_EMPTY <= mV )
+			{
+				// Empty=3.9, Full=4.1
+				// 3.9 - 4.1	--> 4 (Green x4)
+				// 3.7 - 3.9	--> 3 (Green x3)
+				// 3.5 - 3.7	--> 2 (Green x2)
+				// 3.3 - 3.5	--> 1 (Green x1)
+				// 3.1 - 3.3	--> 0 (Red   x1)
+				int	count	= (mV - BATTERY_EMPTY) * 5 / (BATTERY_FULL - BATTERY_EMPTY);
+
+				if( 4 <= count ) cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l, 6*s+t), cv::Point2i( 12*s+l,10*s+t), color_cell, CV_FILLED );
+				if( 3 <= count ) cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l,12*s+t), cv::Point2i( 12*s+l,16*s+t), color_cell, CV_FILLED );
+				if( 2 <= count ) cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l,18*s+t), cv::Point2i( 12*s+l,22*s+t), color_cell, CV_FILLED );
+				if( 1 <= count ) cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l,24*s+t), cv::Point2i( 12*s+l,28*s+t), color_cell, CV_FILLED );
+				if( 0 == count ) cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l,24*s+t), cv::Point2i( 12*s+l,28*s+t), color_red, CV_FILLED );
+			}
+			else
+			{
+//				cv::rectangle( m_iAreaImage,cv::Point2i(  3*s, 6*s), cv::Point2i( 12*s, 28*s), color_red, CV_FILLED );
+				cv::rectangle( m_iAreaImage,cv::Point2i(  3*s,28*s), cv::Point2i( 12*s, 28*s), color_red, CV_FILLED );
+			}
+			
+			if( mA < 0 )
+			{
+				cv::Point2i		chg1[3];
+				cv::Point2i		chg2[3];
+				
+				chg1[0]	= cv::Point2i(  4*s+l,19*s+t );
+				chg1[1]	= cv::Point2i(  8*s+l, 7*s+t );
+				chg1[2]	= cv::Point2i(  8*s+l,19*s+t );
+				cv::fillConvexPoly( m_iAreaImage, chg1, 3, color_yellow );
+
+				chg2[0]	= cv::Point2i(  7*s+l,15*s+t );
+				chg2[1]	= cv::Point2i( 11*s+l,15*s+t );
+				chg2[2]	= cv::Point2i(  7*s+l,27*s+t );
+				cv::fillConvexPoly( m_iAreaImage, chg2, 3, color_yellow );
+			}
+			
+//			cv::imwrite( "/root/BatteryIcon.png", m_iAreaImage );
+		}
+	}
+
+	DrawArea_BatteryIcon( DisplayIF& iDisplay, int x, int y, int cx, int cy ) :
+		DrawAreaIF( iDisplay, x, y, cx, cy )
+	{
+		try
+		{
+			m_piPowerMon	= new PMoni_INA219;
+		}
+		catch( std::exception &e )
+		{
+			printf( "DrawArea_Battery, %s\n", e.what() );
+			m_piPowerMon	= NULL;
+		}
+		
+		m_nScale		= std::max( 1, cy / 32 );
+
+		m_iStarted		= std::chrono::high_resolution_clock::now();
+
+		UpdateBatteryStatus();
+		m_iLastChecked	= std::chrono::high_resolution_clock::now();
+	}
+
+	virtual	void	UpdateInfo( std::map<std::string,std::string>& map )
+	{
+		std::chrono::high_resolution_clock::time_point   current	= std::chrono::high_resolution_clock::now();
+		double	elapsed = std::chrono::duration_cast<std::chrono::seconds>(current-m_iLastChecked).count();
+
+		if( 5 <= elapsed )
+		{
+			m_iLastChecked	= current;
+
+			UpdateBatteryStatus();
+ 		}
+ 		
+		if( m_nCurrent != m_strText )
+		{
+			m_nCurrent	= m_strText;
+			m_iDisp.WriteImageBGRA( m_nRectX, m_nRectY, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+		}
+	}
+
+	static	bool IsValid()
+	{
+		try
+		{
+			ctrl_PowerMonitor*	piPowerMon	= new PMoni_INA219;
+			delete	piPowerMon;
+			return	true;
+		}
+		catch( std::exception &e )
+		{
+		}
+		return	false;
+	}
+	
+protected:
+	ctrl_PowerMonitor*								m_piPowerMon;
+	std::chrono::high_resolution_clock::time_point	m_iStarted;
+	
+	std::chrono::high_resolution_clock::time_point	m_iLastChecked;
+	std::string										m_strText;
+	int												m_nScale;
+};
 
 
 
@@ -1254,11 +1378,10 @@ protected:
 };
 
 
-/*
-class DrawArea_Time: public DrawAreaIF
+class DrawArea_TimeOLD: public DrawAreaIF
 {
 public:
-	DrawArea_Time( DisplayIF& iDisplay, int x, int y, int cx, int cy ) : 
+	DrawArea_TimeOLD( DisplayIF& iDisplay, int x, int y, int cx, int cy ) : 
 		DrawAreaIF( iDisplay, x, y, cx, cy ),
 		m_iFont( FONT_DATE_PATH, m_nRectHeight, false )
 	{
@@ -1295,7 +1418,8 @@ protected:
 	int			m_nOffsetX;
 	int			m_nOffsetY;
 };
-/*/
+
+
 class DrawArea_Time: public DrawAreaIF
 {
 public:
@@ -1309,8 +1433,8 @@ public:
 		m_nOffsetY		= (cy - (b-t)) / 2 - t;
 
 		m_iFont.CalcRect( l,t,r,b, ":" );
-		m_nColonWidth	= (r - l) * 3;
-		m_nColonX		= (m_nColonWidth - (r-l)) / 2 - l;
+		m_nColonWidth	= r;
+		m_nColonOffsetX	= - r / 2;
 		printf("colon %d, %d, %d, %d\n", l, t, r, b );
 
 		m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC1 );
@@ -1333,7 +1457,7 @@ public:
 		if( (m_nLastHour != tl->tm_hour) ||
 			(m_nLastMinute != tl->tm_min))
 		{
-			int	ColonX	= (m_nRectWidth - m_nColonWidth) / 2;
+			int	ColonLeft	= (m_nRectWidth - m_nColonWidth) / 2;
 			int	l,t,r,b;
 
 			m_iAreaImage	= cv::Mat::zeros( m_nRectHeight, m_nRectWidth, CV_8UC1 );
@@ -1341,18 +1465,18 @@ public:
 			// hour
 			sprintf( buf, "%02d", tl->tm_hour );
 			m_iFont.CalcRect( l,t,r,b, buf );
-			m_iFont.DrawTextGRAY( ColonX - r, m_nOffsetY, buf, 255, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+			m_iFont.DrawTextGRAY( ColonLeft - r, m_nOffsetY, buf, 255, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
 
 			// colon
 			if( (tl->tm_sec & 1) == 0 )
 			{
 				sprintf( buf, ":" );
-				m_iFont.DrawTextGRAY( ColonX + m_nColonX, m_nOffsetY, buf, 255, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+				m_iFont.DrawTextGRAY( (m_nRectWidth + m_nColonOffsetX * 2)/ 2, m_nOffsetY, buf, 255, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
 			}
 
 			// minute
 			sprintf( buf, "%02d", tl->tm_min );
-			m_iFont.DrawTextGRAY( ColonX + m_nColonWidth, m_nOffsetY, buf, 255, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+			m_iFont.DrawTextGRAY( ColonLeft + m_nColonWidth, m_nOffsetY, buf, 255, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
 
 			// Transfer image
 			m_iDisp.WriteImageGRAY( m_nRectX, m_nRectY, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
@@ -1364,19 +1488,19 @@ public:
 		}
 		else if( m_nLastSecond != tl->tm_sec )
 		{
-			int	ColonX	= (m_nRectWidth - m_nColonWidth) / 2;
+			int	ColonLeft	= (m_nRectWidth - m_nColonWidth) / 2;
 			
 			// Clear image
-			cv::rectangle( m_iAreaImage, cv::Point(ColonX,0), cv::Point(ColonX+m_nColonWidth, m_nRectHeight), cv::Scalar(0), CV_FILLED);
+			cv::rectangle( m_iAreaImage, cv::Point(ColonLeft,0), cv::Point(ColonLeft+m_nColonWidth, m_nRectHeight), cv::Scalar(0), CV_FILLED);
 			
 			if( (tl->tm_sec & 1) == 0 )
 			{
 				sprintf( buf, ":" );
-				m_iFont.DrawTextGRAY( ColonX + m_nColonX, m_nOffsetY, buf, 255, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+				m_iFont.DrawTextGRAY( (m_nRectWidth + m_nColonOffsetX * 2)/ 2, m_nOffsetY, buf, 255, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
 			}
 
 			// Transfer image
-			m_iDisp.WriteImageGRAY( m_nRectX + ColonX, m_nRectY, m_iAreaImage.data + ColonX, m_iAreaImage.step, m_nColonWidth, m_iAreaImage.rows );
+			m_iDisp.WriteImageGRAY( m_nRectX + ColonLeft, m_nRectY, m_iAreaImage.data + ColonLeft, m_iAreaImage.step, m_nColonWidth, m_iAreaImage.rows );
 
 			// Update variables
 			m_nLastSecond	= tl->tm_sec;
@@ -1390,10 +1514,10 @@ protected:
 	int			m_nLastSecond;
 
 	int			m_nColonWidth;
-	int			m_nColonX;
+	int			m_nColonOffsetX;
 	int			m_nOffsetY;
 };
-//*/
+
 
 class MpdGui
 {
@@ -1721,7 +1845,17 @@ protected:
 	
 			x	= m;
 			y	= m;
-			iDrawAreas.push_back( new DrawArea_STR( "Title",	blue,	*it,	x,	y,			cx - 2*x,	big,	false	) );	y += big + 2;
+
+//			if( DrawArea_BatteryIcon::IsValid() )
+//			{
+//				iDrawAreas.push_back( new DrawArea_BatteryIcon(	*it, cx - 16, 0, 16, big ) );
+//				iDrawAreas.push_back( new DrawArea_STR( "Title",	blue,	*it,	x,	y,			cx - 2*x - 16,	big,	false	) );	y += big + 2;
+//			}
+//			else
+//			{
+				iDrawAreas.push_back( new DrawArea_STR( "Title",	blue,	*it,	x,	y,			cx - 2*x,	big,	false	) );	y += big + 2;
+//			}
+
 			iDrawAreas.push_back( new DrawArea_PlayPos(					*it,	x,	y,			cx - 2*x,	ind				) );	y += ind + 2;
 			iDrawAreas.push_back( new DrawArea_STR( "Album",	white,	*it,	x,	y,			cx - 2*x,	med,	false	) );	y += med + 2;
 			iDrawAreas.push_back( new DrawArea_STR( "Artist",	white,	*it,	x,	y,			cx - 2*x,	med,	false	) );	y += med + 2;
@@ -1847,20 +1981,21 @@ protected:
 			int			l,t,r,b;
 	
 			iFont.CalcRect( l,t,r,b, "88:88" );
-			cx	= r-l;
+			cx	= r;
 			cy	= b-t;
 	
 			if( it->GetSize().width < cx )
 			{
-				cy			= it->GetSize().height * it->GetSize().width / cx;
+				cy			= font_height * it->GetSize().width / cx;
 				cx			= it->GetSize().width;
-				cy			= cy * 7 / 8;
+
+				cy			= cy * 9 / 10;
 				font_height	= cy;
 			}
 	
 	//		printf("%d x %d, %d\n", cx, cy, font_height );
 		}	
-		
+
 		// draw time
 		{
 			x	= (it->GetSize().width  - cx) / 2;
@@ -1871,7 +2006,7 @@ protected:
 			top	= y;
 			y	+= cy;
 		}
-	
+
 		x	= 4;
 	
 		// draw date

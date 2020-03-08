@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <exception>
 
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -21,14 +22,14 @@ public:
         if( m_i2c < 0 )
         {
             printf("ERROR! ctrl_i2c() open( %s ) ret %d\n", dev, m_i2c );
-            throw "ERROR: ctrl_i2c(), open() failed.";
+            throw std::runtime_error("ERROR: ctrl_i2c(), open() failed.");
         }
 
         ret     = ::ioctl( m_i2c, I2C_SLAVE, addr );
         if( ret < 0 )
         {
             printf("ERROR! ctrl_i2c() ioctl ret %d\n", ret );
-            throw "ERROR: ctrl_i2c(), ioctl(I2C_SLAVE) failed.";
+            throw std::runtime_error("ERROR: ctrl_i2c(), ioctl(I2C_SLAVE) failed.");
         }
     }
 
