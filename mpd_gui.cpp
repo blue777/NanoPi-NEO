@@ -1034,16 +1034,17 @@ public:
 
 			const int	l		= (m_nRectWidth  - (icon_cx * m_nScale)) / 2;
 			const int	t		= (m_nRectHeight - (icon_cy * m_nScale)) / 2;
-			const int	w		= icon_cx * m_nScale;
-			const int	h		= icon_cy * m_nScale;
 			const int	s		= m_nScale;
+			const int	r		= l + (s - 1);
+			const int	b		= t + (s - 1);
 
 			const int	mV		= (int)(1000 * m_piPowerMon->GetV());
 			const int	mA		= (int)(1000 * m_piPowerMon->GetA());
 			char		szBuf[128];
 			
 			cv::Scalar	color_frame		= cv::Scalar(192,192,192,255);
-			cv::Scalar	color_cell		= color_frame;//cv::Scalar(128,128,128,255);
+//			cv::Scalar	color_cell		= color_frame;
+			cv::Scalar	color_cell		= cv::Scalar(  0,192,  0,255);
 
 			cv::Scalar	color_red		= cv::Scalar(  0,  0,255,255);
 			cv::Scalar	color_yellow	= cv::Scalar(  0,255,255,255 );
@@ -1052,11 +1053,11 @@ public:
 			m_strText	= szBuf;
 
 			// Draw battery frame
-			cv::rectangle( m_iAreaImage,cv::Point2i(  1*s+l, 4*s+t), cv::Point2i( 14*s+l,30*s+t), color_frame, CV_FILLED );
-			cv::rectangle( m_iAreaImage,cv::Point2i(  4*s+l, 1*s+t), cv::Point2i( 11*s+l, 3*s+t), color_frame, CV_FILLED );
+			cv::rectangle( m_iAreaImage,cv::Point2i(  1*s+l, 4*s+t), cv::Point2i( 14*s+r,30*s+b), color_frame, CV_FILLED );
+			cv::rectangle( m_iAreaImage,cv::Point2i(  4*s+l, 1*s+t), cv::Point2i( 11*s+r, 3*s+b), color_frame, CV_FILLED );
 
-			cv::rectangle( m_iAreaImage,cv::Point2i(  2*s+l, 5*s+t), cv::Point2i( 13*s+l,29*s+t), cv::Scalar(  0,  0,  0,255),CV_FILLED );
-			cv::rectangle( m_iAreaImage,cv::Point2i(  5*s+l, 2*s+t), cv::Point2i( 10*s+l, 4*s+t), cv::Scalar(  0,  0,  0,255),CV_FILLED );
+			cv::rectangle( m_iAreaImage,cv::Point2i(  2*s+l, 5*s+t), cv::Point2i( 13*s+r,29*s+b), cv::Scalar(  0,  0,  0,255),CV_FILLED );
+			cv::rectangle( m_iAreaImage,cv::Point2i(  5*s+l, 2*s+t), cv::Point2i( 10*s+r, 4*s+b), cv::Scalar(  0,  0,  0,255),CV_FILLED );
 
 			if( BATTERY_EMPTY <= mV )
 			{
@@ -1068,16 +1069,16 @@ public:
 				// 3.1 - 3.3	--> 0 (Red   x1)
 				int	count	= (mV - BATTERY_EMPTY) * 5 / (BATTERY_FULL - BATTERY_EMPTY);
 
-				if( 4 <= count ) cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l, 6*s+t), cv::Point2i( 12*s+l,10*s+t), color_cell, CV_FILLED );
-				if( 3 <= count ) cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l,12*s+t), cv::Point2i( 12*s+l,16*s+t), color_cell, CV_FILLED );
-				if( 2 <= count ) cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l,18*s+t), cv::Point2i( 12*s+l,22*s+t), color_cell, CV_FILLED );
-				if( 1 <= count ) cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l,24*s+t), cv::Point2i( 12*s+l,28*s+t), color_cell, CV_FILLED );
-				if( 0 == count ) cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l,24*s+t), cv::Point2i( 12*s+l,28*s+t), color_red, CV_FILLED );
+				if( 4 <= count ) cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l, 6*s+t), cv::Point2i( 12*s+r,10*s+b), color_cell, CV_FILLED );
+				if( 3 <= count ) cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l,12*s+t), cv::Point2i( 12*s+r,16*s+b), color_cell, CV_FILLED );
+				if( 2 <= count ) cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l,18*s+t), cv::Point2i( 12*s+r,22*s+b), color_cell, CV_FILLED );
+				if( 1 <= count ) cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l,24*s+t), cv::Point2i( 12*s+r,28*s+b), color_cell, CV_FILLED );
+				if( 0 == count ) cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l,24*s+t), cv::Point2i( 12*s+r,28*s+b), color_red, CV_FILLED );
 			}
 			else
 			{
-//				cv::rectangle( m_iAreaImage,cv::Point2i(  3*s, 6*s), cv::Point2i( 12*s, 28*s), color_red, CV_FILLED );
-				cv::rectangle( m_iAreaImage,cv::Point2i(  3*s,28*s), cv::Point2i( 12*s, 28*s), color_red, CV_FILLED );
+//				cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l, 6*s+t), cv::Point2i( 12*s+r, 28*s+b), color_red, CV_FILLED );
+				cv::rectangle( m_iAreaImage,cv::Point2i(  3*s+l,28*s+t), cv::Point2i( 12*s+r, 28*s+b), color_red, CV_FILLED );
 			}
 			
 			if( mA < 0 )
@@ -1085,14 +1086,14 @@ public:
 				cv::Point2i		chg1[3];
 				cv::Point2i		chg2[3];
 				
-				chg1[0]	= cv::Point2i(  4*s+l,19*s+t );
-				chg1[1]	= cv::Point2i(  8*s+l, 7*s+t );
-				chg1[2]	= cv::Point2i(  8*s+l,19*s+t );
+				chg1[0]	= cv::Point2i(  4*s+l,19*s+b );
+				chg1[1]	= cv::Point2i(  8*s+r, 7*s+t );
+				chg1[2]	= cv::Point2i(  8*s+r,19*s+b );
 				cv::fillConvexPoly( m_iAreaImage, chg1, 3, color_yellow );
 
 				chg2[0]	= cv::Point2i(  7*s+l,15*s+t );
-				chg2[1]	= cv::Point2i( 11*s+l,15*s+t );
-				chg2[2]	= cv::Point2i(  7*s+l,27*s+t );
+				chg2[1]	= cv::Point2i( 11*s+r,15*s+t );
+				chg2[2]	= cv::Point2i(  7*s+l,27*s+b );
 				cv::fillConvexPoly( m_iAreaImage, chg2, 3, color_yellow );
 			}
 			
@@ -2028,6 +2029,7 @@ protected:
 #if FEATURE_INA219
 		// battery voltage
 		iDrawAreas.push_back( new DrawArea_Battery(	*it,	0,	y,	it->GetSize().width - x,	cy,	true ) );	y	+= cy;
+//		iDrawAreas.push_back( new DrawArea_BatteryIcon(	*it, it->GetSize().width - 16, 0, 16, 32 ) );
 #endif
 	}
 
