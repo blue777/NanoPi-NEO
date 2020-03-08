@@ -1,11 +1,33 @@
 
 #include "display_rgb565_spi.h"
 
-// 
+
 class Display_ILI9486_spi : public Display_RGB565_spi8
 {
 public:
 	Display_ILI9486_spi( int nRotate, int nGpioCS=-1, int nGpioDC=201, int nGpioReset=1, int nGpioBackLight=65 ) :
+		Display_RGB565_spi8(
+			320,
+			480,
+			DISP_CTRL_MIRROR_V | DISP_CTRL_BGR,
+			nRotate,
+			nGpioCS,
+			nGpioDC,
+			nGpioReset,
+			nGpioBackLight,
+			50 * 1000000,
+			SPI_MODE_0
+			)
+	{
+	}
+};
+
+
+// 
+class Display_ILI9486_spi_RGB24 : public Display_RGB565_spi8
+{
+public:
+	Display_ILI9486_spi_RGB24( int nRotate, int nGpioCS=-1, int nGpioDC=201, int nGpioReset=1, int nGpioBackLight=65 ) :
 		Display_RGB565_spi8(
 			320,
 			480,
@@ -32,6 +54,7 @@ public:
 					0x66 );	// RGB666
 
 		//************* Start Initial Sequence **********//
+/*		
 		WriteReg( 0xF1,	0x36, 0x04, 0x00, 0x3C, 0x0F, 0x8F );
 		WriteReg( 0xF2, 0x18, 0xA3, 0x12, 0x02, 0xb2, 0x12, 0xFF, 0x10, 0x00 );
 		WriteReg( 0xF8, 0x21, 0x04 );
@@ -45,7 +68,7 @@ public:
 		WriteReg( 0xB4, 0x02);
 		WriteReg( 0xE0, 0x0F, 0x18, 0x15, 0x09, 0x0B, 0x04, 0x49, 0x64, 0x3D, 0x08, 0x15, 0x06, 0x12, 0x07, 0x00 );
 		WriteReg( 0xE1, 0x0F, 0x38, 0x35, 0x0a, 0x0c, 0x03, 0x4A, 0x42, 0x36, 0x04, 0x0F, 0x03, 0x1F, 0x1B, 0x00 );
-
+//*/
 		m_iFrameBuf.resize( m_tDDRAM.width * m_tDDRAM.height * 3 );
 		return	0;
 	}
