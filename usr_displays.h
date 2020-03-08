@@ -1,8 +1,12 @@
 
 #include <vector>
 
-#include "common/display_ssd1306_i2c.h"	// Conflict to fbdev.h. Use exclusive.
-//#include "common/display_fbdev.h"
+#define	DISPLAY_DEV_FILE_SPI	"/dev/spidev0.0"
+#define	DISPLAY_DEV_FILE_I2C	"/dev/i2c-0"
+
+
+//#include "common/display_ssd1306_i2c.h"	// Conflict to fbdev.h. Use exclusive.
+#include "common/display_fbdev.h"
 
 #include "common/display_st7735_spi.h"
 #include "common/display_st7789_spi.h"

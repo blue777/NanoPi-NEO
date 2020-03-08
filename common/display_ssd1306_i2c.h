@@ -5,11 +5,17 @@
 #include "img_conv.h"
 #include "img_halftone.h"
 
+
+#ifndef	DISPLAY_DEV_FILE_I2C
+#define	DISPLAY_DEV_FILE_I2C	"/dev/i2c-0"
+#endif
+
+
 class Display_SSD1306_i2c : public DisplayIF
 {
 public:
 	Display_SSD1306_i2c( int nRotate = 0, int x_offset = 0) :
-		m_i2c("/dev/i2c-0",0x3C)
+		m_i2c( DISPLAY_DEV_FILE_I2C, 0x3C )
 	{
 		m_nRotate	= nRotate;
 		m_nXoffset	= x_offset;

@@ -10,6 +10,10 @@
 #include "display_if.h"
 //#include <mipi_display.h>
 
+#ifndef	DISPLAY_DEV_FILE_SPI
+#define	DISPLAY_DEV_FILE_SPI	"/dev/spidev0.0"
+#endif
+
 enum
 {
 	MIPI_DCS_ENTER_SLEEP_MODE	= 0x10,
@@ -63,7 +67,7 @@ public:
 		m_iDC( nGpioDC ),
 		m_iRST(nGpioReset),
 		m_iBL( nGpioBackLight),
-		m_iSPI( nSpiSpeed, nSpiMode )
+		m_iSPI( nSpiSpeed, nSpiMode, DISPLAY_DEV_FILE_SPI )
 	{
 		// Set initial state
 		m_iCS	<< 1;
