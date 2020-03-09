@@ -1520,6 +1520,76 @@ protected:
 };
 
 
+
+class DrawArea_Wallpaper: public DrawAreaIF
+{
+public:
+	DrawArea_Wallpaper( DisplayIF& iDisplay, int x, int y, int cx, int cy,std::vector<cv::Mat> &iImages, int interval ) :
+		DrawAreaIF( iDisplay, x, y, cx, cy )
+	{
+		m_iImages			= iImages;
+		m_nInterval			= interval;
+		m_nLastImageIndex	= -1;
+		m_iStarted			= std::chrono::high_resolution_clock::now();
+
+		Reset();
+	};
+
+	virtual	void	Reset()
+	{
+		m_nLastImageIndex	= -1;
+	}
+
+	virtual	void	UpdateInfo( std::map<std::string,std::string>& map )
+	{
+		std::chrono::high_resolution_clock::time_point   current	= std::chrono::high_resolution_clock::now();
+		int		elapsed = std::chrono::duration_cast<std::chrono::seconds>(current - m_iStarted).count();
+		int		index	= (elapsed / m_nInterval) % m_iImages.size();
+
+		if( index != m_nLastImageIndex )
+		{
+			m_nLastImageIndex	= index;
+			
+			cv::Rect	roi;
+
+			// fit to display size
+			if( (m_iImages[index].rows * m_nRectWidth) < (m_iImages[index].cols * m_nRectHeight) )
+			{
+				// Clip left and right
+				roi	= cv::Rect(		(m_iImages[index].cols - m_iImages[index].rows * m_nRectWidth/ m_nRectHeight) / 2,
+									0,
+									m_iImages[index].rows * m_nRectWidth / m_nRectHeight,
+									m_iImages[index].rows );
+			}
+			else
+			{
+				// Clip top and bottom
+				roi	= cv::Rect(		0,
+									(m_iImages[index].rows - m_iImages[index].cols * m_nRectHeight / m_nRectWidth) / 2,
+									m_iImages[index].cols,
+									m_iImages[index].cols * m_nRectHeight / m_nRectWidth );
+			}
+
+//			printf( "%d x %d --> %d, %d - %d x %d\n", m_iImages[index].cols, m_iImages[index].rows, roi.x, roi.y, roi.width, roi.height );
+
+			cv::resize(
+				cv::Mat( m_iImages[index], roi ),
+				m_iAreaImage,
+				cv::Size( m_nRectWidth, m_nRectHeight ), 0, 0, cv::INTER_AREA );
+
+			m_iDisp.WriteImageBGRA( m_nRectX, m_nRectY, m_iAreaImage.data, m_iAreaImage.step, m_iAreaImage.cols, m_iAreaImage.rows );
+		}
+	}
+
+protected:
+	int						m_nLastImageIndex;
+	int						m_nInterval;
+	std::vector<cv::Mat>	m_iImages;
+	std::chrono::high_resolution_clock::time_point	m_iStarted;
+};
+
+
+
 class MpdGui
 {
 public:
@@ -1972,65 +2042,97 @@ protected:
 
 	static	void	SetupLayout_Idle( std::vector<DrawAreaIF*>& iDrawAreas, DisplayIF* it )
 	{
-		int				font_height	= it->GetSize().height;
-		char			buf[256];
-		int				cx, cy;
-		int				x, y, top;
-	
+		if( g_settings.StandbyScreen.EnableWallpaper )
 		{
-			ImageFont	iFont( FONT_DATE_PATH, font_height, false );
-			int			l,t,r,b;
-	
-			iFont.CalcRect( l,t,r,b, "88:88" );
-			cx	= r;
-			cy	= b-t;
-	
-			if( it->GetSize().width < cx )
+			std::vector<cv::Mat>	iImages;
+			
+			for( int i = 0; i < (sizeof(g_settings.StandbyScreen.File)/sizeof(g_settings.StandbyScreen.File[0])); i++ )
 			{
-				cy			= font_height * it->GetSize().width / cx;
-				cx			= it->GetSize().width;
-
-				cy			= cy * 9 / 10;
-				font_height	= cy;
+				cv::Mat		img	= cv::imread( g_settings.StandbyScreen.File[i] );
+				if( !img.empty() )
+				{
+					cv::cvtColor( img, img, cv::COLOR_BGR2BGRA );
+					iImages.push_back( img );
+					printf( "Wallpaper[%d] OK : %s\n", i, g_settings.StandbyScreen.File[i].c_str() );
+				}
+				else
+				{
+					printf( "Wallpaper[%d] NG : %s\n", i, g_settings.StandbyScreen.File[i].c_str() );
+				}
 			}
-	
-	//		printf("%d x %d, %d\n", cx, cy, font_height );
-		}	
 
-		// draw time
-		{
-			x	= (it->GetSize().width  - cx) / 2;
-			y	= (it->GetSize().height - cy) / 2;
-	
-			iDrawAreas.push_back( new DrawArea_Time( *it,	x,	y,	cx,	cy ) );
-	
-			top	= y;
-			y	+= cy;
+			iDrawAreas.push_back(
+				new DrawArea_Wallpaper(
+					*it,
+					0,
+					0,
+					it->GetSize().width,
+					it->GetSize().height,
+					iImages,
+					g_settings.StandbyScreen.Interval ) );
 		}
-
-		x	= 4;
-	
-		// draw date
-		cy	= font_height * 4 / 10;
-		cy	= cy < top ? cy : top;
-		iDrawAreas.push_back( new DrawArea_Date(	*it,	x,	top - cy,	it->GetSize().width - x,	cy ) );
-	
-		cy	= font_height * 4 / 10;
-		cy	= y+cy < it->GetSize().height ? cy : it->GetSize().height - y;
+		else
+		{
+			int				font_height	= it->GetSize().height;
+			char			buf[256];
+			int				cx, cy;
+			int				x, y, top;
 		
-		cy	= cy * 2 / 3;
+			{
+				ImageFont	iFont( FONT_DATE_PATH, font_height, false );
+				int			l,t,r,b;
+		
+				iFont.CalcRect( l,t,r,b, "88:88" );
+				cx	= r;
+				cy	= b-t;
+		
+				if( it->GetSize().width < cx )
+				{
+					cy			= font_height * it->GetSize().width / cx;
+					cx			= it->GetSize().width;
 
-		// ip addr
-		iDrawAreas.push_back( new DrawArea_MyIpAddr(	0xFFFFFFFF,	*it,	0,	y,	it->GetSize().width - x,	cy,	true ) );	y	+= cy;
+					cy			= cy * 9 / 10;
+					font_height	= cy;
+				}
+		
+		//		printf("%d x %d, %d\n", cx, cy, font_height );
+			}	
 
-		// cpu temp
-		iDrawAreas.push_back( new DrawArea_CpuTemp( *it,	0,	y,	it->GetSize().width - x,	cy,	true ) );	y	+= cy;
+			// draw time
+			{
+				x	= (it->GetSize().width  - cx) / 2;
+				y	= (it->GetSize().height - cy) / 2;
+		
+				iDrawAreas.push_back( new DrawArea_Time( *it,	x,	y,	cx,	cy ) );
+		
+				top	= y;
+				y	+= cy;
+			}
+
+			x	= 4;
+		
+			// draw date
+			cy	= font_height * 4 / 10;
+			cy	= cy < top ? cy : top;
+			iDrawAreas.push_back( new DrawArea_Date(	*it,	x,	top - cy,	it->GetSize().width - x,	cy ) );
+		
+			cy	= font_height * 4 / 10;
+			cy	= y+cy < it->GetSize().height ? cy : it->GetSize().height - y;
+			
+			cy	= cy * 2 / 3;
+
+			// ip addr
+			iDrawAreas.push_back( new DrawArea_MyIpAddr(	0xFFFFFFFF,	*it,	0,	y,	it->GetSize().width - x,	cy,	true ) );	y	+= cy;
+
+			// cpu temp
+			iDrawAreas.push_back( new DrawArea_CpuTemp( *it,	0,	y,	it->GetSize().width - x,	cy,	true ) );	y	+= cy;
 
 #if FEATURE_INA219
-		// battery voltage
-		iDrawAreas.push_back( new DrawArea_Battery(	*it,	0,	y,	it->GetSize().width - x,	cy,	true ) );	y	+= cy;
-//		iDrawAreas.push_back( new DrawArea_BatteryIcon(	*it, it->GetSize().width - 16, 0, 16, 32 ) );
+			// battery voltage
+			iDrawAreas.push_back( new DrawArea_Battery(	*it,	0,	y,	it->GetSize().width - x,	cy,	true ) );	y	+= cy;
+	//		iDrawAreas.push_back( new DrawArea_BatteryIcon(	*it, it->GetSize().width - 16, 0, 16, 32 ) );
 #endif
+		}
 	}
 
 	void	SetupButtons()

@@ -141,6 +141,16 @@ public:
 		CONFIG(GpioButtons, Right,	3);
 		CONFIG(GpioButtons, Down,	203 );
 		CONFIG(GpioButtons, Up,		198 );
+
+		CONFIG(StandbyScreen, EnableWallpaper, 0 );
+		CONFIG(StandbyScreen, Interval, 600 );
+		
+		for( int i = 0; i < 10; i++ )
+		{
+			char	buf[32];
+			sprintf( buf, "File%02d", i );
+			UpdateValue( conf, "StandbyScreen", buf, StandbyScreen.File[i] );
+		}
 	}
 
 public:
@@ -166,6 +176,12 @@ public:
 		int		Down;
 	} GpioButtons;
 
+	struct
+	{
+		int				EnableWallpaper;
+		int				Interval;
+		std::string		File[10];
+	} StandbyScreen;
 };
 
 
