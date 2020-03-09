@@ -136,7 +136,7 @@ public:
 	
 	virtual	int		TransferRGB( int x, int y, int cx, int cy, const uint8_t * image, int image_bytes )
 	{
-		int		ox	= 53;	// (240 - 135) / 2
+		int		ox	= 52;	// (240 - 135) / 2
 		int		oy	= 40;	// (320 - 240) / 2
 		
 		if( m_nDispCtrl & DISP_CTRL_SWAP_HV )
