@@ -43,11 +43,8 @@ public:
 		return	GetShuntOf1LSB() / s_reg;
 	}
 
-protected:
 	virtual	int16_t	ReadShuntRaw()=0;
 	virtual	int16_t	ReadVoltageRaw()=0;
-
-	
 
 protected:
 	double		m_dShuntReg;
@@ -59,12 +56,29 @@ protected:
 class PMoni_INA226 : public ctrl_PowerMonitor
 {
 public:
+	enum ALERT_FUNC
+	{
+		ALERT_SHUNT_OVER_VOLT		= 0x8000,
+		ALERT_SHUNT_UNDER_VOLT		= 0x4000,
+		ALERT_BUS_OVER_VOLT			= 0x2000,
+		ALERT_BUS_UNDER_VOLT		= 0x1000,
+	};
+	
 	PMoni_INA226( const char * dev = "/dev/i2c-0", int slave_addr = 0x44 ) : m_i2c( dev, slave_addr )
 	{
 		// reg = m_dShuntReg * m_dCalibMeasured / m_dCalibExpected
 		m_dShuntReg			= 0.005;
-		m_dCalibMeasured	= 0.1855;
-		m_dCalibExpected	= 0.1574;
+		m_dCalibMeasured	= 1;
+		m_dCalibExpected	= 1;
+	}
+	
+	void	SetAlertFunc( enum ALERT_FUNC func, int16_t value )
+	{
+		uint8_t  w_data6[3]	= { 0x06, (uint8_t)(0xFF & (func  >> 8)), (uint8_t)(0xFF & func) };
+		uint8_t  w_data7[3]	= { 0x07, (uint8_t)(0xFF & (value >> 8)), (uint8_t)(0xFF & value) };
+ 
+		m_i2c.write( w_data6, sizeof(w_data6) );
+		m_i2c.write( w_data7, sizeof(w_data7) );
 	}
 
 	virtual	void	SetSamplingDuration( int msec )
